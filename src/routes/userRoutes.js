@@ -99,7 +99,8 @@ router.get("/profile", jwtAuthMiddleware, async (req, res) => {
 //  change user password route
 router.put("/profile/password", jwtAuthMiddleware, async (req, res) => {
   try {
-    const { oldPassword, newPassword } = req.body;
+    const data = JSON.parse(req.body);
+    const { oldPassword, newPassword } = data;
     const userId = req.user.id;
 
     // Find user by ID

@@ -93063,7 +93063,8 @@ router.get("/profile", jwtAuthMiddleware, async (req, res) => {
 });
 router.put("/profile/password", jwtAuthMiddleware, async (req, res) => {
   try {
-    const { oldPassword, newPassword } = req.body;
+    const data = JSON.parse(req.body);
+    const { oldPassword, newPassword } = data;
     const userId = req.user.id;
     const userProfile = await user_default.findById(userId);
     if (!userProfile) {
