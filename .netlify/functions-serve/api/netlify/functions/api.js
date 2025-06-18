@@ -93027,7 +93027,8 @@ router.post("/signUp", async (req, res) => {
 });
 router.post("/login", async (req, res) => {
   try {
-    const { password, cnic } = req.body;
+    const data = JSON.parse(req.body);
+    const { password, cnic } = data;
     const user = await user_default.findOne({ cnic, password });
     console.log(`User login attempt with CNIC:${cnic} & password:${password} `);
     if (!user) {

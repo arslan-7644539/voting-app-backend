@@ -47,7 +47,8 @@ router.post("/signUp", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     // extract email and password from request body
-    const { password, cnic } = req.body;
+    const data = JSON.parse(req.body);
+    const { password, cnic } = data;
 
     // find user by cnic
     const user = await User.findOne({ cnic: cnic, password: password });
