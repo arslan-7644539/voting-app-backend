@@ -93310,12 +93310,41 @@ router3.use("/candidate", candidateRoutes_default);
 app.use("/.netlify/functions/api", router3);
 
 // netlify/functions/api.js
-ConnectDB().then(() => {
-  console.log("DB Connected in Lambda");
-}).catch((err) => {
-  console.error("DB Connection Error:", err);
-});
-var handler = (0, import_serverless_http.default)(app);
+var isDbConnected = false;
+var ensureDbConnection = async () => {
+  if (!isDbConnected) {
+    try {
+      await ConnectDB();
+      isDbConnected = true;
+      console.log("DB Connected in Lambda");
+    } catch (error) {
+      console.error("DB Connection Error:", error);
+      throw error;
+    }
+  }
+};
+var serverlessHandler = (0, import_serverless_http.default)(app);
+var handler = async (event, context) => {
+  context.callbackWaitsForEmptyEventLoop = false;
+  try {
+    await ensureDbConnection();
+    return await serverlessHandler(event, context);
+  } catch (error) {
+    console.error("Lambda Handler Error:", error);
+    return {
+      statusCode: 500,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+        // Add CORS if needed
+      },
+      body: JSON.stringify({
+        error: "Internal Server Error",
+        message: error.message
+      })
+    };
+  }
+};
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   handler
