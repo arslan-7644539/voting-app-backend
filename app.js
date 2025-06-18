@@ -22,13 +22,15 @@ app.use("/candidate", candidateRoutes); // Use candidate routes
 // -------------------------------------------------
 
 // Connect to MongoDB and start the server
-ConnectDB()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
-    console.log(`Connected DB`);
-  })
-  .catch((error) => {
-    console.log("MongoDB Connection Error ", error);
-  });
+// ConnectDB()
+//   .then(() => {
+//     app.listen(PORT, () => {
+//       console.log(`Server running on http://localhost:${PORT}`);
+//     });
+//     console.log(`Connected DB`);
+//   })
+//   .catch((error) => {
+//     console.log("MongoDB Connection Error ", error);
+//   });
+
+export { app, ConnectDB };
