@@ -40,17 +40,4 @@ router.use("/candidate", candidateRoutes);
 app.use("/.netlify/functions/api", router);
 // -------------------------------------------------
 
-// Connect to MongoDB and start the server
-// ConnectDB()
-//   .then(() => {
-//     app.listen(PORT, () => {
-//       console.log(`Server running on http://localhost:${PORT}`);
-//     });
-//     console.log(`Connected DB`);
-//   })
-//   .catch((error) => {
-//     console.log("MongoDB Connection Error ", error);
-//   });
-// this only uncommnet for locla testing
-
 export { app, ConnectDB };
