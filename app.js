@@ -11,6 +11,7 @@ dotenv.config();
 //  Initialize express app
 const app = express();
 const PORT = process.env.PORT || 3000;
+const router = express.Router();
 
 // ------------------------------------------------
 // Middleware
@@ -22,7 +23,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Routes
 
 // Fixed: Use app.get() instead of app.use() for the root route
-app.get("/", (req, res) => {
+router.get("/", (req, res) => {
   res.status(200).json({
     message: "Welcome to the Job Portal API",
     status: "success",
@@ -30,10 +31,12 @@ app.get("/", (req, res) => {
 });
 
 // Use user routes
-app.use("/.netlify/functions/api/user", userRoutes);
+router.use("/user", userRoutes);
 // Use candidate routes
-app.use("/.netlify/functions/api/candidate", candidateRoutes);
+router.use("/candidate", candidateRoutes);
 
+// Mount router on the base path used by Netlify functions
+app.use("/.netlify/functions/api", router);
 // -------------------------------------------------
 
 // Connect to MongoDB and start the server
@@ -47,5 +50,6 @@ app.use("/.netlify/functions/api/candidate", candidateRoutes);
 //   .catch((error) => {
 //     console.log("MongoDB Connection Error ", error);
 //   });
+// this only uncommnet for locla testing
 
 export { app, ConnectDB };
