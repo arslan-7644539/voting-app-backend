@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import bodyParser from "body-parser";
+// import userRoutes from "./src/routes/userRoutes.js"; // Import user routes
 import userRoutes from "./src/routes/userRoutes.js"; // Import user routes
 import candidateRoutes from "./src/routes/candidateRoutes.js"; // Import candidate routes
 import { ConnectDB } from "./src/utils/db.js";
