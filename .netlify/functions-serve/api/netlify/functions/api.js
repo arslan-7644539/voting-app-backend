@@ -19041,7 +19041,7 @@ var require_urlencoded = __commonJS({
 var require_body_parser = __commonJS({
   "node_modules/body-parser/index.js"(exports2, module2) {
     "use strict";
-    exports2 = module2.exports = bodyParser2;
+    exports2 = module2.exports = bodyParser;
     Object.defineProperty(exports2, "json", {
       configurable: true,
       enumerable: true,
@@ -19062,7 +19062,7 @@ var require_body_parser = __commonJS({
       enumerable: true,
       get: () => require_urlencoded()
     });
-    function bodyParser2() {
+    function bodyParser() {
       throw new Error("The bodyParser() generic has been split into individual middleware to use instead.");
     }
   }
@@ -24398,7 +24398,7 @@ var require_serve_static = __commonJS({
 var require_express = __commonJS({
   "node_modules/express/lib/express.js"(exports2, module2) {
     "use strict";
-    var bodyParser2 = require_body_parser();
+    var bodyParser = require_body_parser();
     var EventEmitter = require("events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
@@ -24426,11 +24426,11 @@ var require_express = __commonJS({
     exports2.response = res;
     exports2.Route = Router.Route;
     exports2.Router = Router;
-    exports2.json = bodyParser2.json;
-    exports2.raw = bodyParser2.raw;
+    exports2.json = bodyParser.json;
+    exports2.raw = bodyParser.raw;
     exports2.static = require_serve_static();
-    exports2.text = bodyParser2.text;
-    exports2.urlencoded = bodyParser2.urlencoded;
+    exports2.text = bodyParser.text;
+    exports2.urlencoded = bodyParser.urlencoded;
   }
 });
 
@@ -92917,7 +92917,6 @@ var import_serverless_http = __toESM(require_serverless_http(), 1);
 // app.js
 var import_express3 = __toESM(require_express2(), 1);
 var import_dotenv = __toESM(require_main(), 1);
-var import_body_parser = __toESM(require_body_parser(), 1);
 
 // src/routes/userRoutes.js
 var import_express = __toESM(require_express2(), 1);
@@ -93004,7 +93003,7 @@ var user_default = model("User", userSchema);
 var router = import_express.default.Router();
 router.post("/signUp", async (req, res) => {
   try {
-    const data = req.body;
+    const data = JSON.parse(req.body);
     const { email } = data;
     console.log("Received data for user registration:", data);
     const newUser = new user_default(data);
@@ -93294,11 +93293,9 @@ var ConnectDB = async () => {
 // app.js
 import_dotenv.default.config();
 var app = (0, import_express3.default)();
-var PORT = process.env.PORT || 3e3;
 var router3 = import_express3.default.Router();
 app.use(import_express3.default.json());
-app.use(import_body_parser.default.json());
-app.use(import_body_parser.default.urlencoded({ extended: true }));
+app.use(import_express3.default.urlencoded({ extended: true }));
 router3.get("/", (req, res) => {
   res.status(200).json({
     message: "Welcome to the Job Portal API",
@@ -93311,36 +93308,68 @@ app.use("/.netlify/functions/api", router3);
 
 // netlify/functions/api.js
 var isDbConnected = false;
+var dbConnectionPromise = null;
 var ensureDbConnection = async () => {
-  if (!isDbConnected) {
-    try {
-      await ConnectDB();
+  if (!isDbConnected && !dbConnectionPromise) {
+    dbConnectionPromise = ConnectDB().then(() => {
       isDbConnected = true;
-      console.log("DB Connected in Lambda");
-    } catch (error) {
-      console.error("DB Connection Error:", error);
+      console.log("\u2705 Database connected in Lambda.");
+    }).catch((error) => {
+      console.error("\u274C Database connection error:", error);
       throw error;
-    }
+    }).finally(() => {
+      dbConnectionPromise = null;
+    });
   }
+  if (dbConnectionPromise) await dbConnectionPromise;
+  if (!isDbConnected) throw new Error("Database connection failed.");
 };
-var serverlessHandler = (0, import_serverless_http.default)(app);
+var serverlessHandler = (0, import_serverless_http.default)(app, {
+  binary: ["image/*", "application/pdf", "application/octet-stream"],
+  request: (req, event) => {
+    console.log("\u{1F50D} Incoming Event Details:");
+    console.log("Body Type:", typeof event.body);
+    console.log("isBase64Encoded:", event.isBase64Encoded);
+    console.log(
+      "Content-Type:",
+      event.headers["content-type"] || event.headers["Content-Type"]
+    );
+    if (event.isBase64Encoded && event.body) {
+      try {
+        const decoded = Buffer.from(event.body, "base64").toString("utf-8");
+        event.body = decoded;
+        event.isBase64Encoded = false;
+        console.log("\u2705 Body successfully decoded.");
+      } catch (err) {
+        console.error("\u274C Base64 Decode Error:", err);
+      }
+    }
+    return req;
+  }
+});
 var handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
   try {
+    console.log("\u{1F4E5} Event:", JSON.stringify(event, null, 2));
+    console.log("Method:", event.httpMethod, "Path:", event.path);
     await ensureDbConnection();
-    return await serverlessHandler(event, context);
+    const result = await serverlessHandler(event, context);
+    console.log("\u{1F4E4} Response Status:", result.statusCode);
+    return result;
   } catch (error) {
-    console.error("Lambda Handler Error:", error);
+    console.error("\u274C Lambda Error:", error);
     return {
       statusCode: 500,
       headers: {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-        // Add CORS if needed
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS"
       },
       body: JSON.stringify({
         error: "Internal Server Error",
-        message: error.message
+        message: error.message,
+        ...process.env.NODE_ENV === "development" && { stack: error.stack }
       })
     };
   }

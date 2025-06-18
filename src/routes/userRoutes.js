@@ -10,7 +10,8 @@ const router = express.Router();
 router.post("/signUp", async (req, res) => {
   try {
     // const { name, age, email, mobile, address, cnic, password } = req.body;
-    const data = req.body;
+    // const rawData = req.body;
+    const data = JSON.parse(req.body);
     const { email } = data;
     console.log("Received data for user registration:", data);
 
