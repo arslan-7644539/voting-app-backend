@@ -30,9 +30,9 @@ app.get("/", (req, res) => {
 });
 
 // Use user routes
-app.use("/user", userRoutes);
+app.use("/.netlify/functions/api/user", userRoutes);
 // Use candidate routes
-app.use("/candidate", candidateRoutes);
+app.use("/.netlify/functions/api/candidate", candidateRoutes);
 
 // -------------------------------------------------
 
