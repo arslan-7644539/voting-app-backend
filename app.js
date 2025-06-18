@@ -2,7 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import bodyParser from "body-parser";
 import userRoutes from "./src/routes/userRoutes.js"; // Import user routes
-import candidateRoutes from "./src/routes/candidateRoutes.js"; // Import user routes
+import candidateRoutes from "./src/routes/candidateRoutes.js"; // Import candidate routes
 import { ConnectDB } from "./src/utils/db.js";
 
 // config dotenv file
@@ -12,20 +12,28 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ------------------------------------------------// Middleware
+// ------------------------------------------------
+// Middleware
 app.use(express.json());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-// -------------------------------------------------// Routes
 
-app.use("/", async (req, res) => {
+// -------------------------------------------------
+// Routes
+
+// Fixed: Use app.get() instead of app.use() for the root route
+app.get("/", (req, res) => {
   res.status(200).json({
     message: "Welcome to the Job Portal API",
     status: "success",
   });
-}); // Use user routes
-app.use("/user", userRoutes); // Use user routes
-app.use("/candidate", candidateRoutes); // Use candidate routes
+});
+
+// Use user routes
+app.use("/user", userRoutes);
+// Use candidate routes
+app.use("/candidate", candidateRoutes);
+
 // -------------------------------------------------
 
 // Connect to MongoDB and start the server
