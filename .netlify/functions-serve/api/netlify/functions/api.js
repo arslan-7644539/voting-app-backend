@@ -35153,8 +35153,8 @@ var require_utils4 = __commonJS({
     function resolveOptions(parent, options) {
       const result = Object.assign({}, options, (0, bson_1.resolveBSONOptions)(options, parent));
       const timeoutMS = options?.timeoutMS ?? parent?.timeoutMS;
-      const session = options?.session;
-      if (!session?.inTransaction()) {
+      const session2 = options?.session;
+      if (!session2?.inTransaction()) {
         const readConcern = read_concern_1.ReadConcern.fromOptions(options) ?? parent?.readConcern;
         if (readConcern) {
           result.readConcern = readConcern;
@@ -35178,7 +35178,7 @@ var require_utils4 = __commonJS({
       if (readPreference) {
         result.readPreference = readPreference;
       }
-      const isConvenientTransaction = session?.explicit && session?.timeoutContext != null;
+      const isConvenientTransaction = session2?.explicit && session2?.timeoutContext != null;
       if (isConvenientTransaction && options?.timeoutMS != null) {
         throw new error_1.MongoInvalidArgumentError("An operation cannot be given a timeoutMS setting when inside a withTransaction call that has a timeoutMS setting");
       }
@@ -36875,29 +36875,29 @@ var require_execute_operation = __commonJS({
         throw new error_1.MongoRuntimeError("This method requires a valid operation instance");
       }
       const topology = client.topology == null ? await (0, utils_1.abortable)(autoConnect(client), operation.options) : client.topology;
-      let session = operation.session;
+      let session2 = operation.session;
       let owner;
-      if (session == null) {
+      if (session2 == null) {
         owner = Symbol();
-        session = client.startSession({ owner, explicit: false });
-      } else if (session.hasEnded) {
+        session2 = client.startSession({ owner, explicit: false });
+      } else if (session2.hasEnded) {
         throw new error_1.MongoExpiredSessionError("Use of expired sessions is not permitted");
-      } else if (session.snapshotEnabled && !topology.capabilities.supportsSnapshotReads) {
+      } else if (session2.snapshotEnabled && !topology.capabilities.supportsSnapshotReads) {
         throw new error_1.MongoCompatibilityError("Snapshot reads require MongoDB 5.0 or later");
-      } else if (session.client !== client) {
+      } else if (session2.client !== client) {
         throw new error_1.MongoInvalidArgumentError("ClientSession must be from the same MongoClient");
       }
       const readPreference = operation.readPreference ?? read_preference_1.ReadPreference.primary;
-      const inTransaction = !!session?.inTransaction();
+      const inTransaction = !!session2?.inTransaction();
       const hasReadAspect = operation.hasAspect(operation_1.Aspect.READ_OPERATION);
       if (inTransaction && !readPreference.equals(read_preference_1.ReadPreference.primary) && (hasReadAspect || operation.commandName === "runCommand")) {
         throw new error_1.MongoTransactionError(`Read preference in a transaction must be primary, not: ${readPreference.mode}`);
       }
-      if (session?.isPinned && session.transaction.isCommitted && !operation.bypassPinningCheck) {
-        session.unpin();
+      if (session2?.isPinned && session2.transaction.isCommitted && !operation.bypassPinningCheck) {
+        session2.unpin();
       }
       timeoutContext ??= timeout_1.TimeoutContext.create({
-        session,
+        session: session2,
         serverSelectionTimeoutMS: client.s.options.serverSelectionTimeoutMS,
         waitQueueTimeoutMS: client.s.options.waitQueueTimeoutMS,
         timeoutMS: operation.options.timeoutMS
@@ -36906,12 +36906,12 @@ var require_execute_operation = __commonJS({
         return await tryOperation(operation, {
           topology,
           timeoutContext,
-          session,
+          session: session2,
           readPreference
         });
       } finally {
-        if (session?.owner != null && session.owner === owner) {
-          await session.endSession();
+        if (session2?.owner != null && session2.owner === owner) {
+          await session2.endSession();
         }
       }
     }
@@ -36933,7 +36933,7 @@ var require_execute_operation = __commonJS({
       }
       return client.topology;
     }
-    async function tryOperation(operation, { topology, timeoutContext, session, readPreference }) {
+    async function tryOperation(operation, { topology, timeoutContext, session: session2, readPreference }) {
       let selector;
       if (operation.hasAspect(operation_1.Aspect.MUST_SELECT_SAME_SERVER)) {
         selector = (0, server_selection_1.sameServerSelector)(operation.server?.description);
@@ -36943,20 +36943,20 @@ var require_execute_operation = __commonJS({
         selector = readPreference;
       }
       let server = await topology.selectServer(selector, {
-        session,
+        session: session2,
         operationName: operation.commandName,
         timeoutContext,
         signal: operation.options.signal
       });
       const hasReadAspect = operation.hasAspect(operation_1.Aspect.READ_OPERATION);
       const hasWriteAspect = operation.hasAspect(operation_1.Aspect.WRITE_OPERATION);
-      const inTransaction = session?.inTransaction() ?? false;
+      const inTransaction = session2?.inTransaction() ?? false;
       const willRetryRead = topology.s.options.retryReads && !inTransaction && operation.canRetryRead;
       const willRetryWrite = topology.s.options.retryWrites && !inTransaction && (0, utils_1.supportsRetryableWrites)(server) && operation.canRetryWrite;
-      const willRetry = operation.hasAspect(operation_1.Aspect.RETRYABLE) && session != null && (hasReadAspect && willRetryRead || hasWriteAspect && willRetryWrite);
-      if (hasWriteAspect && willRetryWrite && session != null) {
+      const willRetry = operation.hasAspect(operation_1.Aspect.RETRYABLE) && session2 != null && (hasReadAspect && willRetryRead || hasWriteAspect && willRetryWrite);
+      if (hasWriteAspect && willRetryWrite && session2 != null) {
         operation.options.willRetryWrite = true;
-        session.incrementTransactionNumber();
+        session2.incrementTransactionNumber();
       }
       const maxTries = willRetry ? timeoutContext.csotEnabled() ? Infinity : 2 : 1;
       let previousOperationError;
@@ -36977,11 +36977,11 @@ var require_execute_operation = __commonJS({
             throw previousOperationError;
           if (hasReadAspect && !(0, error_1.isRetryableReadError)(previousOperationError))
             throw previousOperationError;
-          if (previousOperationError instanceof error_1.MongoNetworkError && operation.hasAspect(operation_1.Aspect.CURSOR_CREATING) && session != null && session.isPinned && !session.inTransaction()) {
-            session.unpin({ force: true, forceClear: true });
+          if (previousOperationError instanceof error_1.MongoNetworkError && operation.hasAspect(operation_1.Aspect.CURSOR_CREATING) && session2 != null && session2.isPinned && !session2.inTransaction()) {
+            session2.unpin({ force: true, forceClear: true });
           }
           server = await topology.selectServer(selector, {
-            session,
+            session: session2,
             operationName: operation.commandName,
             previousServer,
             signal: operation.options.signal
@@ -36994,7 +36994,7 @@ var require_execute_operation = __commonJS({
           if (tries > 0 && operation.hasAspect(operation_1.Aspect.COMMAND_BATCHING)) {
             operation.resetBatch();
           }
-          return await operation.execute(server, session, timeoutContext);
+          return await operation.execute(server, session2, timeoutContext);
         } catch (operationError) {
           if (!(operationError instanceof error_1.MongoError))
             throw operationError;
@@ -37093,7 +37093,7 @@ var require_kill_cursors = __commonJS({
       get commandName() {
         return "killCursors";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         if (server !== this.server) {
           throw new error_1.MongoRuntimeError("Killcursor must run on the same server operation began on");
         }
@@ -37107,7 +37107,7 @@ var require_kill_cursors = __commonJS({
         };
         try {
           await server.command(this.ns, killCursorsCommand, {
-            session,
+            session: session2,
             timeoutContext
           });
         } catch (error) {
@@ -37309,7 +37309,7 @@ var require_aggregate = __commonJS({
       addToPipeline(stage) {
         this.pipeline.push(stage);
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const options = this.options;
         const serverWireVersion = (0, utils_1.maxWireVersion)(server);
         const command = { aggregate: this.target, pipeline: this.pipeline };
@@ -37338,7 +37338,7 @@ var require_aggregate = __commonJS({
         if (options.batchSize && !this.hasWriteStage) {
           command.cursor.batchSize = options.batchSize;
         }
-        return await super.executeCommand(server, session, command, timeoutContext, this.explain ? responses_1.ExplainedCursorResponse : responses_1.CursorResponse);
+        return await super.executeCommand(server, session2, command, timeoutContext, this.explain ? responses_1.ExplainedCursorResponse : responses_1.CursorResponse);
       }
     };
     exports2.AggregateOperation = AggregateOperation;
@@ -37384,11 +37384,11 @@ var require_aggregation_cursor = __commonJS({
         return super.map(transform);
       }
       /** @internal */
-      async _initialize(session) {
+      async _initialize(session2) {
         const options = {
           ...this.aggregateOptions,
           ...this.cursorOptions,
-          session,
+          session: session2,
           signal: this.signal
         };
         if (options.explain) {
@@ -37400,7 +37400,7 @@ var require_aggregation_cursor = __commonJS({
         }
         const aggregateOperation = new aggregate_1.AggregateOperation(this.namespace, this.pipeline, options);
         const response = await (0, execute_operation_1.executeOperation)(this.client, aggregateOperation, this.timeoutContext);
-        return { server: aggregateOperation.server, session, response };
+        return { server: aggregateOperation.server, session: session2, response };
       }
       async explain(verbosity, options) {
         const { explain, timeout } = this.resolveExplainTimeoutOptions(verbosity, options);
@@ -37526,7 +37526,7 @@ var require_count = __commonJS({
       get commandName() {
         return "count";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const options = this.options;
         const cmd = {
           count: this.collectionName,
@@ -37544,7 +37544,7 @@ var require_count = __commonJS({
         if (typeof options.maxTimeMS === "number") {
           cmd.maxTimeMS = options.maxTimeMS;
         }
-        const result = await super.executeCommand(server, session, cmd, timeoutContext);
+        const result = await super.executeCommand(server, session2, cmd, timeoutContext);
         return result ? result.n : 0;
       }
     };
@@ -37672,7 +37672,7 @@ var require_find = __commonJS({
       get commandName() {
         return "find";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         this.server = server;
         const options = this.options;
         let findCommand = makeFindCommand(this.ns, this.filter, options);
@@ -37684,7 +37684,7 @@ var require_find = __commonJS({
           ...this.options,
           ...this.bsonOptions,
           documentsReturnedIn: "firstBatch",
-          session,
+          session: session2,
           timeoutContext
         }, this.explain ? responses_1.ExplainedCursorResponse : responses_1.CursorResponse);
       }
@@ -37838,12 +37838,12 @@ var require_find_cursor = __commonJS({
         return super.map(transform);
       }
       /** @internal */
-      async _initialize(session) {
+      async _initialize(session2) {
         const options = {
           ...this.findOptions,
           // NOTE: order matters here, we may need to refine this
           ...this.cursorOptions,
-          session,
+          session: session2,
           signal: this.signal
         };
         if (options.explain) {
@@ -37856,7 +37856,7 @@ var require_find_cursor = __commonJS({
         const findOperation = new find_1.FindOperation(this.namespace, this.cursorFilter, options);
         const response = await (0, execute_operation_1.executeOperation)(this.client, findOperation, this.timeoutContext);
         this.numReturned = response.batchSize;
-        return { server: findOperation.server, session, response };
+        return { server: findOperation.server, session: session2, response };
       }
       /** @internal */
       async getMore(batchSize) {
@@ -38267,7 +38267,7 @@ var require_indexes = __commonJS({
       get commandName() {
         return "createIndexes";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const options = this.options;
         const indexes = this.indexes;
         const serverWireVersion = (0, utils_1.maxWireVersion)(server);
@@ -38279,7 +38279,7 @@ var require_indexes = __commonJS({
           cmd.commitQuorum = options.commitQuorum;
         }
         this.options.collation = void 0;
-        await super.executeCommand(server, session, cmd, timeoutContext);
+        await super.executeCommand(server, session2, cmd, timeoutContext);
         const indexNames = indexes.map((index) => index.name || "");
         return indexNames;
       }
@@ -38295,9 +38295,9 @@ var require_indexes = __commonJS({
       get commandName() {
         return "dropIndexes";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const cmd = { dropIndexes: this.collection.collectionName, index: this.indexName };
-        return await super.executeCommand(server, session, cmd, timeoutContext);
+        return await super.executeCommand(server, session2, cmd, timeoutContext);
       }
     };
     exports2.DropIndexOperation = DropIndexOperation;
@@ -38311,14 +38311,14 @@ var require_indexes = __commonJS({
       get commandName() {
         return "listIndexes";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const serverWireVersion = (0, utils_1.maxWireVersion)(server);
         const cursor = this.options.batchSize ? { batchSize: this.options.batchSize } : {};
         const command = { listIndexes: this.collectionNamespace.collection, cursor };
         if (serverWireVersion >= 9 && this.options.comment !== void 0) {
           command.comment = this.options.comment;
         }
-        return await super.executeCommand(server, session, command, timeoutContext, responses_1.CursorResponse);
+        return await super.executeCommand(server, session2, command, timeoutContext, responses_1.CursorResponse);
       }
     };
     exports2.ListIndexesOperation = ListIndexesOperation;
@@ -38354,14 +38354,14 @@ var require_list_indexes_cursor = __commonJS({
         });
       }
       /** @internal */
-      async _initialize(session) {
+      async _initialize(session2) {
         const operation = new indexes_1.ListIndexesOperation(this.parent, {
           ...this.cursorOptions,
           ...this.options,
-          session
+          session: session2
         });
         const response = await (0, execute_operation_1.executeOperation)(this.parent.client, operation, this.timeoutContext);
-        return { server: operation.server, session, response };
+        return { server: operation.server, session: session2, response };
       }
     };
     exports2.ListIndexesCursor = ListIndexesCursor;
@@ -38403,7 +38403,7 @@ var require_bulk_write = __commonJS({
       get commandName() {
         return "bulkWrite";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const coll = this.collection;
         const operations = this.operations;
         const options = {
@@ -38416,7 +38416,7 @@ var require_bulk_write = __commonJS({
         for (let i = 0; i < operations.length; i++) {
           bulk.raw(operations[i]);
         }
-        return await bulk.execute({ ...options, session });
+        return await bulk.execute({ ...options, session: session2 });
       }
     };
     exports2.BulkWriteOperation = BulkWriteOperation;
@@ -38452,7 +38452,7 @@ var require_distinct = __commonJS({
       get commandName() {
         return "distinct";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const coll = this.collection;
         const key = this.key;
         const query = this.query;
@@ -38473,7 +38473,7 @@ var require_distinct = __commonJS({
         }
         (0, utils_1.decorateWithReadConcern)(cmd, coll, options);
         (0, utils_1.decorateWithCollation)(cmd, coll, options);
-        const result = await super.executeCommand(server, session, cmd, timeoutContext);
+        const result = await super.executeCommand(server, session2, cmd, timeoutContext);
         return this.explain ? result : result.values;
       }
     };
@@ -38501,7 +38501,7 @@ var require_drop = __commonJS({
       get commandName() {
         return "drop";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const db = this.db;
         const options = this.options;
         const name = this.name;
@@ -38517,7 +38517,7 @@ var require_drop = __commonJS({
           for (const collectionName of [escCollection, ecocCollection]) {
             const dropOp = new _DropCollectionOperation(db, collectionName);
             try {
-              await dropOp.executeWithoutEncryptedFieldsCheck(server, session, timeoutContext);
+              await dropOp.executeWithoutEncryptedFieldsCheck(server, session2, timeoutContext);
             } catch (err) {
               if (!(err instanceof error_1.MongoServerError) || err.code !== error_1.MONGODB_ERROR_CODES.NamespaceNotFound) {
                 throw err;
@@ -38525,10 +38525,10 @@ var require_drop = __commonJS({
             }
           }
         }
-        return await this.executeWithoutEncryptedFieldsCheck(server, session, timeoutContext);
+        return await this.executeWithoutEncryptedFieldsCheck(server, session2, timeoutContext);
       }
-      async executeWithoutEncryptedFieldsCheck(server, session, timeoutContext) {
-        await super.executeCommand(server, session, { drop: this.name }, timeoutContext);
+      async executeWithoutEncryptedFieldsCheck(server, session2, timeoutContext) {
+        await super.executeCommand(server, session2, { drop: this.name }, timeoutContext);
         return true;
       }
     };
@@ -38541,8 +38541,8 @@ var require_drop = __commonJS({
       get commandName() {
         return "dropDatabase";
       }
-      async execute(server, session, timeoutContext) {
-        await super.executeCommand(server, session, { dropDatabase: 1 }, timeoutContext);
+      async execute(server, session2, timeoutContext) {
+        await super.executeCommand(server, session2, { dropDatabase: 1 }, timeoutContext);
         return true;
       }
     };
@@ -38569,7 +38569,7 @@ var require_estimated_document_count = __commonJS({
       get commandName() {
         return "count";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const cmd = { count: this.collectionName };
         if (typeof this.options.maxTimeMS === "number") {
           cmd.maxTimeMS = this.options.maxTimeMS;
@@ -38577,7 +38577,7 @@ var require_estimated_document_count = __commonJS({
         if (this.options.comment !== void 0) {
           cmd.comment = this.options.comment;
         }
-        const response = await super.executeCommand(server, session, cmd, timeoutContext);
+        const response = await super.executeCommand(server, session2, cmd, timeoutContext);
         return response?.n || 0;
       }
     };
@@ -38650,7 +38650,7 @@ var require_find_and_modify = __commonJS({
       get commandName() {
         return "findAndModify";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const coll = this.collection;
         const query = this.query;
         const options = { ...this.options, ...this.bsonOptions };
@@ -38667,7 +38667,7 @@ var require_find_and_modify = __commonJS({
           }
           cmd.hint = options.hint;
         }
-        const result = await super.executeCommand(server, session, cmd, timeoutContext);
+        const result = await super.executeCommand(server, session2, cmd, timeoutContext);
         return options.includeResultMetadata ? result : result.value ?? null;
       }
     };
@@ -38749,7 +38749,7 @@ var require_insert = __commonJS({
       get commandName() {
         return "insert";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const options = this.options ?? {};
         const ordered = typeof options.ordered === "boolean" ? options.ordered : true;
         const command = {
@@ -38763,7 +38763,7 @@ var require_insert = __commonJS({
         if (options.comment !== void 0) {
           command.comment = options.comment;
         }
-        return await super.executeCommand(server, session, command, timeoutContext);
+        return await super.executeCommand(server, session2, command, timeoutContext);
       }
     };
     exports2.InsertOperation = InsertOperation;
@@ -38771,8 +38771,8 @@ var require_insert = __commonJS({
       constructor(collection, doc, options) {
         super(collection.s.namespace, (0, utils_1.maybeAddIdToDocuments)(collection, [doc], options), options);
       }
-      async execute(server, session, timeoutContext) {
-        const res = await super.execute(server, session, timeoutContext);
+      async execute(server, session2, timeoutContext) {
+        const res = await super.execute(server, session2, timeoutContext);
         if (res.code)
           throw new error_1.MongoServerError(res);
         if (res.writeErrors) {
@@ -38798,7 +38798,7 @@ var require_insert = __commonJS({
       get commandName() {
         return "insert";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const coll = this.collection;
         const options = { ...this.options, ...this.bsonOptions, readPreference: this.readPreference };
         const writeConcern = write_concern_1.WriteConcern.fromOptions(options);
@@ -38806,7 +38806,7 @@ var require_insert = __commonJS({
           insertOne: { document: document2 }
         })), options);
         try {
-          const res = await bulkWriteOperation.execute(server, session, timeoutContext);
+          const res = await bulkWriteOperation.execute(server, session2, timeoutContext);
           return {
             acknowledged: writeConcern?.w !== 0,
             insertedCount: res.insertedCount,
@@ -38844,9 +38844,9 @@ var require_is_capped = __commonJS({
       get commandName() {
         return "listCollections";
       }
-      async execute(server, session) {
+      async execute(server, session2) {
         const coll = this.collection;
-        const [collection] = await coll.s.db.listCollections({ name: coll.collectionName }, { ...this.options, nameOnly: false, readPreference: this.readPreference, session }).toArray();
+        const [collection] = await coll.s.db.listCollections({ name: coll.collectionName }, { ...this.options, nameOnly: false, readPreference: this.readPreference, session: session2 }).toArray();
         if (collection == null || collection.options == null) {
           throw new error_1.MongoAPIError(`collection ${coll.namespace} not found`);
         }
@@ -38874,9 +38874,9 @@ var require_options_operation = __commonJS({
       get commandName() {
         return "listCollections";
       }
-      async execute(server, session) {
+      async execute(server, session2) {
         const coll = this.collection;
-        const [collection] = await coll.s.db.listCollections({ name: coll.collectionName }, { ...this.options, nameOnly: false, readPreference: this.readPreference, session }).toArray();
+        const [collection] = await coll.s.db.listCollections({ name: coll.collectionName }, { ...this.options, nameOnly: false, readPreference: this.readPreference, session: session2 }).toArray();
         if (collection == null || collection.options == null) {
           throw new error_1.MongoAPIError(`collection ${coll.namespace} not found`);
         }
@@ -38908,7 +38908,7 @@ var require_rename = __commonJS({
       get commandName() {
         return "renameCollection";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const renameCollection = this.collection.namespace;
         const toCollection = this.collection.s.namespace.withCollection(this.newName).toString();
         const dropTarget = typeof this.options.dropTarget === "boolean" ? this.options.dropTarget : false;
@@ -38917,7 +38917,7 @@ var require_rename = __commonJS({
           to: toCollection,
           dropTarget
         };
-        await super.executeCommand(server, session, command, timeoutContext);
+        await super.executeCommand(server, session2, command, timeoutContext);
         return new collection_1.Collection(this.collection.s.db, this.newName, this.collection.s.options);
       }
     };
@@ -38942,14 +38942,14 @@ var require_create = __commonJS({
       get commandName() {
         return "createSearchIndexes";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const namespace = this.collection.fullNamespace;
         const command = {
           createSearchIndexes: namespace.collection,
           indexes: this.descriptions
         };
         const res = await server.command(namespace, command, {
-          session,
+          session: session2,
           timeoutContext
         });
         const indexesCreated = res?.indexesCreated ?? [];
@@ -38977,7 +38977,7 @@ var require_drop2 = __commonJS({
       get commandName() {
         return "dropSearchIndex";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const namespace = this.collection.fullNamespace;
         const command = {
           dropSearchIndex: namespace.collection
@@ -38986,7 +38986,7 @@ var require_drop2 = __commonJS({
           command.name = this.name;
         }
         try {
-          await server.command(namespace, command, { session, timeoutContext });
+          await server.command(namespace, command, { session: session2, timeoutContext });
         } catch (error) {
           const isNamespaceNotFoundError = error instanceof error_1.MongoServerError && error.code === error_1.MONGODB_ERROR_CODES.NamespaceNotFound;
           if (!isNamespaceNotFoundError) {
@@ -39016,14 +39016,14 @@ var require_update = __commonJS({
       get commandName() {
         return "updateSearchIndex";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const namespace = this.collection.fullNamespace;
         const command = {
           updateSearchIndex: namespace.collection,
           name: this.name,
           definition: this.definition
         };
-        await server.command(namespace, command, { session, timeoutContext });
+        await server.command(namespace, command, { session: session2, timeoutContext });
         return;
       }
     };
@@ -39058,7 +39058,7 @@ var require_update2 = __commonJS({
         }
         return this.statements.every((op) => op.multi == null || op.multi === false);
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const options = this.options ?? {};
         const ordered = typeof options.ordered === "boolean" ? options.ordered : true;
         const command = {
@@ -39081,7 +39081,7 @@ var require_update2 = __commonJS({
             throw new error_1.MongoCompatibilityError(`hint is not supported with unacknowledged writes`);
           }
         }
-        const res = await super.executeCommand(server, session, command, timeoutContext);
+        const res = await super.executeCommand(server, session2, command, timeoutContext);
         return res;
       }
     };
@@ -39093,8 +39093,8 @@ var require_update2 = __commonJS({
           throw new error_1.MongoInvalidArgumentError("Update document requires atomic operators");
         }
       }
-      async execute(server, session, timeoutContext) {
-        const res = await super.execute(server, session, timeoutContext);
+      async execute(server, session2, timeoutContext) {
+        const res = await super.execute(server, session2, timeoutContext);
         if (this.explain != null)
           return res;
         if (res.code)
@@ -39118,8 +39118,8 @@ var require_update2 = __commonJS({
           throw new error_1.MongoInvalidArgumentError("Update document requires atomic operators");
         }
       }
-      async execute(server, session, timeoutContext) {
-        const res = await super.execute(server, session, timeoutContext);
+      async execute(server, session2, timeoutContext) {
+        const res = await super.execute(server, session2, timeoutContext);
         if (this.explain != null)
           return res;
         if (res.code)
@@ -39143,8 +39143,8 @@ var require_update2 = __commonJS({
           throw new error_1.MongoInvalidArgumentError("Replacement document must not contain atomic operators");
         }
       }
-      async execute(server, session, timeoutContext) {
-        const res = await super.execute(server, session, timeoutContext);
+      async execute(server, session2, timeoutContext) {
+        const res = await super.execute(server, session2, timeoutContext);
         if (this.explain != null)
           return res;
         if (res.code)
@@ -39952,13 +39952,13 @@ var require_change_stream_cursor = __commonJS({
           ...this.cursorOptions
         });
       }
-      async _initialize(session) {
+      async _initialize(session2) {
         const aggregateOperation = new aggregate_1.AggregateOperation(this.namespace, this.pipeline, {
           ...this.cursorOptions,
           ...this.changeStreamCursorOptions,
-          session
+          session: session2
         });
-        const response = await (0, execute_operation_1.executeOperation)(session.client, aggregateOperation, this.timeoutContext);
+        const response = await (0, execute_operation_1.executeOperation)(session2.client, aggregateOperation, this.timeoutContext);
         const server = aggregateOperation.server;
         this.maxWireVersion = (0, utils_1.maxWireVersion)(server);
         if (this.startAtOperationTime == null && this.changeStreamCursorOptions.resumeAfter == null && this.changeStreamCursorOptions.startAfter == null && this.maxWireVersion >= 7) {
@@ -39967,7 +39967,7 @@ var require_change_stream_cursor = __commonJS({
         this._processBatch(response);
         this.emit(constants_1.INIT, response);
         this.emit(constants_1.RESPONSE);
-        return { server, session, response };
+        return { server, session: session2, response };
       }
       async getMore(batchSize) {
         const response = await super.getMore(batchSize);
@@ -40000,7 +40000,7 @@ var require_list_databases = __commonJS({
       get commandName() {
         return "listDatabases";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const cmd = { listDatabases: 1 };
         if (typeof this.options.nameOnly === "boolean") {
           cmd.nameOnly = this.options.nameOnly;
@@ -40014,7 +40014,7 @@ var require_list_databases = __commonJS({
         if ((0, utils_1.maxWireVersion)(server) >= 9 && this.options.comment !== void 0) {
           cmd.comment = this.options.comment;
         }
-        return await super.executeCommand(server, session, cmd, timeoutContext);
+        return await super.executeCommand(server, session2, cmd, timeoutContext);
       }
     };
     exports2.ListDatabasesOperation = ListDatabasesOperation;
@@ -40039,8 +40039,8 @@ var require_remove_user = __commonJS({
       get commandName() {
         return "dropUser";
       }
-      async execute(server, session, timeoutContext) {
-        await super.executeCommand(server, session, { dropUser: this.username }, timeoutContext);
+      async execute(server, session2, timeoutContext) {
+        await super.executeCommand(server, session2, { dropUser: this.username }, timeoutContext);
         return true;
       }
     };
@@ -40067,12 +40067,12 @@ var require_run_command = __commonJS({
       get commandName() {
         return "runCommand";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         this.server = server;
         const res = await server.command(this.ns, this.command, {
           ...this.options,
           readPreference: this.readPreference,
-          session,
+          session: session2,
           timeoutContext
         }, this.options.responseType);
         return res;
@@ -40089,12 +40089,12 @@ var require_run_command = __commonJS({
       get commandName() {
         return "runCommand";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         this.server = server;
         const res = await server.command(this.ns, this.command, {
           ...this.options,
           readPreference: this.readPreference,
-          session,
+          session: session2,
           timeoutContext
         });
         return res;
@@ -40129,9 +40129,9 @@ var require_validate_collection = __commonJS({
       get commandName() {
         return "validate";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const collectionName = this.collectionName;
-        const doc = await super.executeCommand(server, session, this.command, timeoutContext);
+        const doc = await super.executeCommand(server, session2, this.command, timeoutContext);
         if (doc.result != null && typeof doc.result !== "string")
           throw new error_1.MongoUnexpectedServerResponseError("Error with validation data");
         if (doc.result != null && doc.result.match(/exception|corrupt/) != null)
@@ -40292,8 +40292,8 @@ var require_list_collections = __commonJS({
       get commandName() {
         return "listCollections";
       }
-      async execute(server, session, timeoutContext) {
-        return await super.executeCommand(server, session, this.generateCommand((0, utils_1.maxWireVersion)(server)), timeoutContext, responses_1.CursorResponse);
+      async execute(server, session2, timeoutContext) {
+        return await super.executeCommand(server, session2, this.generateCommand((0, utils_1.maxWireVersion)(server)), timeoutContext, responses_1.CursorResponse);
       }
       /* This is here for the purpose of unit testing the final command that gets sent. */
       generateCommand(wireVersion) {
@@ -40342,15 +40342,15 @@ var require_list_collections_cursor = __commonJS({
         });
       }
       /** @internal */
-      async _initialize(session) {
+      async _initialize(session2) {
         const operation = new list_collections_1.ListCollectionsOperation(this.parent, this.filter, {
           ...this.cursorOptions,
           ...this.options,
-          session,
+          session: session2,
           signal: this.signal
         });
         const response = await (0, execute_operation_1.executeOperation)(this.parent.client, operation, this.timeoutContext);
-        return { server: operation.server, session, response };
+        return { server: operation.server, session: session2, response };
       }
     };
     exports2.ListCollectionsCursor = ListCollectionsCursor;
@@ -40425,17 +40425,17 @@ var require_run_command_cursor = __commonJS({
         this.command = Object.freeze({ ...command });
       }
       /** @internal */
-      async _initialize(session) {
+      async _initialize(session2) {
         const operation = new run_command_1.RunCommandOperation(this.db, this.command, {
           ...this.cursorOptions,
-          session,
+          session: session2,
           readPreference: this.cursorOptions.readPreference,
           responseType: responses_1.CursorResponse
         });
         const response = await (0, execute_operation_1.executeOperation)(this.client, operation, this.timeoutContext);
         return {
           server: operation.server,
-          session,
+          session: session2,
           response
         };
       }
@@ -40470,8 +40470,8 @@ var require_collections = __commonJS({
       get commandName() {
         return "listCollections";
       }
-      async execute(server, session) {
-        const documents = await this.db.listCollections({}, { ...this.options, nameOnly: true, readPreference: this.readPreference, session }).toArray();
+      async execute(server, session2) {
+        const documents = await this.db.listCollections({}, { ...this.options, nameOnly: true, readPreference: this.readPreference, session: session2 }).toArray();
         const collections = [];
         for (const { name } of documents) {
           if (!name.includes("$")) {
@@ -40532,7 +40532,7 @@ var require_create_collection = __commonJS({
       get commandName() {
         return "create";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const db = this.db;
         const name = this.name;
         const options = this.options;
@@ -40550,20 +40550,20 @@ var require_create_collection = __commonJS({
                 unique: true
               }
             });
-            await createOp.executeWithoutEncryptedFieldsCheck(server, session, timeoutContext);
+            await createOp.executeWithoutEncryptedFieldsCheck(server, session2, timeoutContext);
           }
           if (!options.encryptedFields) {
             this.options = { ...this.options, encryptedFields };
           }
         }
-        const coll = await this.executeWithoutEncryptedFieldsCheck(server, session, timeoutContext);
+        const coll = await this.executeWithoutEncryptedFieldsCheck(server, session2, timeoutContext);
         if (encryptedFields) {
           const createIndexOp = indexes_1.CreateIndexesOperation.fromIndexSpecification(db, name, { __safeContent__: 1 }, {});
-          await createIndexOp.execute(server, session, timeoutContext);
+          await createIndexOp.execute(server, session2, timeoutContext);
         }
         return coll;
       }
-      async executeWithoutEncryptedFieldsCheck(server, session, timeoutContext) {
+      async executeWithoutEncryptedFieldsCheck(server, session2, timeoutContext) {
         const db = this.db;
         const name = this.name;
         const options = this.options;
@@ -40573,7 +40573,7 @@ var require_create_collection = __commonJS({
             cmd[n] = options[n];
           }
         }
-        await super.executeCommand(server, session, cmd, timeoutContext);
+        await super.executeCommand(server, session2, cmd, timeoutContext);
         return new collection_1.Collection(db, name, options);
       }
     };
@@ -40598,8 +40598,8 @@ var require_profiling_level = __commonJS({
       get commandName() {
         return "profile";
       }
-      async execute(server, session, timeoutContext) {
-        const doc = await super.executeCommand(server, session, { profile: -1 }, timeoutContext);
+      async execute(server, session2, timeoutContext) {
+        const doc = await super.executeCommand(server, session2, { profile: -1 }, timeoutContext);
         if (doc.ok === 1) {
           const was = doc.was;
           if (was === 0)
@@ -40656,12 +40656,12 @@ var require_set_profiling_level = __commonJS({
       get commandName() {
         return "profile";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const level = this.level;
         if (!levelValues.has(level)) {
           throw new error_1.MongoInvalidArgumentError(`Profiling level must be one of "${(0, utils_1.enumToString)(exports2.ProfilingLevel)}"`);
         }
-        await super.executeCommand(server, session, { profile: this.profile }, timeoutContext);
+        await super.executeCommand(server, session2, { profile: this.profile }, timeoutContext);
         return level;
       }
     };
@@ -40685,12 +40685,12 @@ var require_stats = __commonJS({
       get commandName() {
         return "dbStats";
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const command = { dbStats: true };
         if (this.options.scale != null) {
           command.scale = this.options.scale;
         }
-        return await super.executeCommand(server, session, command, timeoutContext);
+        return await super.executeCommand(server, session2, command, timeoutContext);
       }
     };
     exports2.DbStatsOperation = DbStatsOperation;
@@ -49533,14 +49533,14 @@ var require_sessions = __commonJS({
        *
        * @param session - The session to compare to
        */
-      equals(session) {
-        if (!(session instanceof _ClientSession)) {
+      equals(session2) {
+        if (!(session2 instanceof _ClientSession)) {
           return false;
         }
-        if (this.id == null || session.id == null) {
+        if (this.id == null || session2.id == null) {
           return false;
         }
-        return utils_1.ByteUtils.equals(this.id.id.buffer, session.id.id.buffer);
+        return utils_1.ByteUtils.equals(this.id.id.buffer, session2.id.id.buffer);
       }
       /**
        * Increment the transaction number on the internal ServerSession
@@ -49870,20 +49870,20 @@ var require_sessions = __commonJS({
       const isNonDeterministicWriteConcernError = err instanceof error_1.MongoServerError && err.codeName && NON_DETERMINISTIC_WRITE_CONCERN_ERRORS.has(err.codeName);
       return isMaxTimeMSExpiredError(err) || !isNonDeterministicWriteConcernError && err.code !== error_1.MONGODB_ERROR_CODES.UnsatisfiableWriteConcern && err.code !== error_1.MONGODB_ERROR_CODES.UnknownReplWriteConcern;
     }
-    function maybeClearPinnedConnection(session, options) {
-      const conn = session.pinnedConnection;
+    function maybeClearPinnedConnection(session2, options) {
+      const conn = session2.pinnedConnection;
       const error = options?.error;
-      if (session.inTransaction() && error && error instanceof error_1.MongoError && error.hasErrorLabel(error_1.MongoErrorLabel.TransientTransactionError)) {
+      if (session2.inTransaction() && error && error instanceof error_1.MongoError && error.hasErrorLabel(error_1.MongoErrorLabel.TransientTransactionError)) {
         return;
       }
-      const topology = session.client.topology;
+      const topology = session2.client.topology;
       if (conn && topology != null) {
         const servers = Array.from(topology.s.servers.values());
         const loadBalancer = servers[0];
         if (options?.error == null || options?.force) {
           loadBalancer.pool.checkIn(conn);
-          session.pinnedConnection = void 0;
-          conn.emit(constants_1.UNPINNED, session.transaction.state !== transactions_1.TxnState.NO_TRANSACTION ? metrics_1.ConnectionPoolMetrics.TXN : metrics_1.ConnectionPoolMetrics.CURSOR);
+          session2.pinnedConnection = void 0;
+          conn.emit(constants_1.UNPINNED, session2.transaction.state !== transactions_1.TxnState.NO_TRANSACTION ? metrics_1.ConnectionPoolMetrics.TXN : metrics_1.ConnectionPoolMetrics.CURSOR);
           if (options?.forceClear) {
             loadBalancer.pool.clear({ serviceId: conn.serviceId });
           }
@@ -49940,18 +49940,18 @@ var require_sessions = __commonJS({
        */
       acquire() {
         const sessionTimeoutMinutes = this.client.topology?.logicalSessionTimeoutMinutes ?? 10;
-        let session = null;
+        let session2 = null;
         while (this.sessions.length > 0) {
           const potentialSession = this.sessions.shift();
           if (potentialSession != null && (!!this.client.topology?.loadBalanced || !potentialSession.hasTimedOut(sessionTimeoutMinutes))) {
-            session = potentialSession;
+            session2 = potentialSession;
             break;
           }
         }
-        if (session == null) {
-          session = new ServerSession();
+        if (session2 == null) {
+          session2 = new ServerSession();
         }
-        return session;
+        return session2;
       }
       /**
        * Release a session to the session pool
@@ -49960,91 +49960,91 @@ var require_sessions = __commonJS({
        *
        * @param session - The session to release to the pool
        */
-      release(session) {
+      release(session2) {
         const sessionTimeoutMinutes = this.client.topology?.logicalSessionTimeoutMinutes ?? 10;
         if (this.client.topology?.loadBalanced && !sessionTimeoutMinutes) {
-          this.sessions.unshift(session);
+          this.sessions.unshift(session2);
         }
         if (!sessionTimeoutMinutes) {
           return;
         }
-        this.sessions.prune((session2) => session2.hasTimedOut(sessionTimeoutMinutes));
-        if (!session.hasTimedOut(sessionTimeoutMinutes)) {
-          if (session.isDirty) {
+        this.sessions.prune((session3) => session3.hasTimedOut(sessionTimeoutMinutes));
+        if (!session2.hasTimedOut(sessionTimeoutMinutes)) {
+          if (session2.isDirty) {
             return;
           }
-          this.sessions.unshift(session);
+          this.sessions.unshift(session2);
         }
       }
     };
     exports2.ServerSessionPool = ServerSessionPool;
-    function applySession(session, command, options) {
-      if (session.hasEnded) {
+    function applySession(session2, command, options) {
+      if (session2.hasEnded) {
         return new error_1.MongoExpiredSessionError();
       }
-      const serverSession = session.serverSession;
+      const serverSession = session2.serverSession;
       if (serverSession == null) {
         return new error_1.MongoRuntimeError("Unable to acquire server session");
       }
       if (options.writeConcern?.w === 0) {
-        if (session && session.explicit) {
+        if (session2 && session2.explicit) {
           return new error_1.MongoAPIError("Cannot have explicit session with unacknowledged writes");
         }
         return;
       }
       serverSession.lastUse = (0, utils_1.now)();
       command.lsid = serverSession.id;
-      const inTxnOrTxnCommand = session.inTransaction() || (0, transactions_1.isTransactionCommand)(command);
+      const inTxnOrTxnCommand = session2.inTransaction() || (0, transactions_1.isTransactionCommand)(command);
       const isRetryableWrite = !!options.willRetryWrite;
       if (isRetryableWrite || inTxnOrTxnCommand) {
-        serverSession.txnNumber += session.txnNumberIncrement;
-        session.txnNumberIncrement = 0;
+        serverSession.txnNumber += session2.txnNumberIncrement;
+        session2.txnNumberIncrement = 0;
         command.txnNumber = bson_1.Long.fromNumber(serverSession.txnNumber);
       }
       if (!inTxnOrTxnCommand) {
-        if (session.transaction.state !== transactions_1.TxnState.NO_TRANSACTION) {
-          session.transaction.transition(transactions_1.TxnState.NO_TRANSACTION);
+        if (session2.transaction.state !== transactions_1.TxnState.NO_TRANSACTION) {
+          session2.transaction.transition(transactions_1.TxnState.NO_TRANSACTION);
         }
-        if (session.supports.causalConsistency && session.operationTime && (0, utils_1.commandSupportsReadConcern)(command)) {
+        if (session2.supports.causalConsistency && session2.operationTime && (0, utils_1.commandSupportsReadConcern)(command)) {
           command.readConcern = command.readConcern || {};
-          Object.assign(command.readConcern, { afterClusterTime: session.operationTime });
-        } else if (session.snapshotEnabled) {
+          Object.assign(command.readConcern, { afterClusterTime: session2.operationTime });
+        } else if (session2.snapshotEnabled) {
           command.readConcern = command.readConcern || { level: read_concern_1.ReadConcernLevel.snapshot };
-          if (session.snapshotTime != null) {
-            Object.assign(command.readConcern, { atClusterTime: session.snapshotTime });
+          if (session2.snapshotTime != null) {
+            Object.assign(command.readConcern, { atClusterTime: session2.snapshotTime });
           }
         }
         return;
       }
       command.autocommit = false;
-      if (session.transaction.state === transactions_1.TxnState.STARTING_TRANSACTION) {
-        session.transaction.transition(transactions_1.TxnState.TRANSACTION_IN_PROGRESS);
+      if (session2.transaction.state === transactions_1.TxnState.STARTING_TRANSACTION) {
+        session2.transaction.transition(transactions_1.TxnState.TRANSACTION_IN_PROGRESS);
         command.startTransaction = true;
-        const readConcern = session.transaction.options.readConcern || session?.clientOptions?.readConcern;
+        const readConcern = session2.transaction.options.readConcern || session2?.clientOptions?.readConcern;
         if (readConcern) {
           command.readConcern = readConcern;
         }
-        if (session.supports.causalConsistency && session.operationTime) {
+        if (session2.supports.causalConsistency && session2.operationTime) {
           command.readConcern = command.readConcern || {};
-          Object.assign(command.readConcern, { afterClusterTime: session.operationTime });
+          Object.assign(command.readConcern, { afterClusterTime: session2.operationTime });
         }
       }
       return;
     }
-    function updateSessionFromResponse(session, document2) {
+    function updateSessionFromResponse(session2, document2) {
       if (document2.$clusterTime) {
-        (0, common_1._advanceClusterTime)(session, document2.$clusterTime);
+        (0, common_1._advanceClusterTime)(session2, document2.$clusterTime);
       }
-      if (document2.operationTime && session && session.supports.causalConsistency) {
-        session.advanceOperationTime(document2.operationTime);
+      if (document2.operationTime && session2 && session2.supports.causalConsistency) {
+        session2.advanceOperationTime(document2.operationTime);
       }
-      if (document2.recoveryToken && session && session.inTransaction()) {
-        session.transaction._recoveryToken = document2.recoveryToken;
+      if (document2.recoveryToken && session2 && session2.inTransaction()) {
+        session2.transaction._recoveryToken = document2.recoveryToken;
       }
-      if (session?.snapshotEnabled && session.snapshotTime == null) {
+      if (session2?.snapshotEnabled && session2.snapshotTime == null) {
         const atClusterTime = document2.atClusterTime;
         if (atClusterTime) {
-          session.snapshotTime = atClusterTime;
+          session2.snapshotTime = atClusterTime;
         }
       }
     }
@@ -50532,7 +50532,7 @@ var require_connection = __commonJS({
       prepareCommand(db, command, options) {
         let cmd = { ...command };
         const readPreference = (0, shared_1.getReadPreference)(options);
-        const session = options?.session;
+        const session2 = options?.session;
         let clusterTime = this.clusterTime;
         if (this.serverApi) {
           const { version, strict, deprecationErrors } = this.serverApi;
@@ -50542,14 +50542,14 @@ var require_connection = __commonJS({
           if (deprecationErrors != null)
             cmd.apiDeprecationErrors = deprecationErrors;
         }
-        if (this.hasSessionSupport && session) {
-          if (session.clusterTime && clusterTime && session.clusterTime.clusterTime.greaterThan(clusterTime.clusterTime)) {
-            clusterTime = session.clusterTime;
+        if (this.hasSessionSupport && session2) {
+          if (session2.clusterTime && clusterTime && session2.clusterTime.clusterTime.greaterThan(clusterTime.clusterTime)) {
+            clusterTime = session2.clusterTime;
           }
-          const sessionError = (0, sessions_1.applySession)(session, cmd, options);
+          const sessionError = (0, sessions_1.applySession)(session2, cmd, options);
           if (sessionError)
             throw sessionError;
-        } else if (session?.explicit) {
+        } else if (session2?.explicit) {
           throw new error_1.MongoCompatibilityError("Current topology does not support sessions");
         }
         if (clusterTime) {
@@ -52134,14 +52134,14 @@ var require_server = __commonJS({
         if (this.description.iscryptd) {
           options.omitMaxTimeMS = true;
         }
-        const session = options.session;
-        let conn = session?.pinnedConnection;
+        const session2 = options.session;
+        let conn = session2?.pinnedConnection;
         this.incrementOperationCount();
         if (conn == null) {
           try {
             conn = await this.pool.checkOut(options);
-            if (this.loadBalanced && isPinnableCommand(cmd, session)) {
-              session?.pin(conn);
+            if (this.loadBalanced && isPinnableCommand(cmd, session2)) {
+              session2?.pin(conn);
             }
           } catch (checkoutError) {
             this.decrementOperationCount();
@@ -52180,7 +52180,7 @@ var require_server = __commonJS({
           }
         } finally {
           this.decrementOperationCount();
-          if (session?.pinnedConnection !== conn) {
+          if (session2?.pinnedConnection !== conn) {
             if (reauthPromise != null) {
               const checkBackIn = () => {
                 this.pool.checkIn(conn);
@@ -52249,24 +52249,24 @@ var require_server = __commonJS({
         if (connectionIsStale(this.pool, connection)) {
           return error;
         }
-        const session = options?.session;
+        const session2 = options?.session;
         if (error instanceof error_1.MongoNetworkError) {
-          if (session && !session.hasEnded && session.serverSession) {
-            session.serverSession.isDirty = true;
+          if (session2 && !session2.hasEnded && session2.serverSession) {
+            session2.serverSession.isDirty = true;
           }
-          if (inActiveTransaction(session, cmd) && !error.hasErrorLabel(error_1.MongoErrorLabel.TransientTransactionError)) {
+          if (inActiveTransaction(session2, cmd) && !error.hasErrorLabel(error_1.MongoErrorLabel.TransientTransactionError)) {
             error.addErrorLabel(error_1.MongoErrorLabel.TransientTransactionError);
           }
-          if ((isRetryableWritesEnabled(this.topology) || (0, transactions_1.isTransactionCommand)(cmd)) && (0, utils_1.supportsRetryableWrites)(this) && !inActiveTransaction(session, cmd)) {
+          if ((isRetryableWritesEnabled(this.topology) || (0, transactions_1.isTransactionCommand)(cmd)) && (0, utils_1.supportsRetryableWrites)(this) && !inActiveTransaction(session2, cmd)) {
             error.addErrorLabel(error_1.MongoErrorLabel.RetryableWriteError);
           }
         } else {
-          if ((isRetryableWritesEnabled(this.topology) || (0, transactions_1.isTransactionCommand)(cmd)) && (0, error_1.needsRetryableWriteLabel)(error, (0, utils_1.maxWireVersion)(this), this.description.type) && !inActiveTransaction(session, cmd)) {
+          if ((isRetryableWritesEnabled(this.topology) || (0, transactions_1.isTransactionCommand)(cmd)) && (0, error_1.needsRetryableWriteLabel)(error, (0, utils_1.maxWireVersion)(this), this.description.type) && !inActiveTransaction(session2, cmd)) {
             error.addErrorLabel(error_1.MongoErrorLabel.RetryableWriteError);
           }
         }
-        if (session && session.isPinned && error.hasErrorLabel(error_1.MongoErrorLabel.TransientTransactionError)) {
-          session.unpin({ force: true });
+        if (session2 && session2.isPinned && error.hasErrorLabel(error_1.MongoErrorLabel.TransientTransactionError)) {
+          session2.unpin({ force: true });
         }
         this.handleError(error, connection);
         return error;
@@ -52301,9 +52301,9 @@ var require_server = __commonJS({
       }
       server.emit(Server.DESCRIPTION_RECEIVED, new server_description_1.ServerDescription(server.description.hostAddress, void 0, { error }));
     }
-    function isPinnableCommand(cmd, session) {
-      if (session) {
-        return session.inTransaction() || session.transaction.isCommitted && "commitTransaction" in cmd || "aggregate" in cmd || "find" in cmd || "getMore" in cmd || "listCollections" in cmd || "listIndexes" in cmd || "bulkWrite" in cmd;
+    function isPinnableCommand(cmd, session2) {
+      if (session2) {
+        return session2.inTransaction() || session2.transaction.isCommitted && "commitTransaction" in cmd || "aggregate" in cmd || "find" in cmd || "getMore" in cmd || "listCollections" in cmd || "listIndexes" in cmd || "bulkWrite" in cmd;
       }
       return false;
     }
@@ -52318,8 +52318,8 @@ var require_server = __commonJS({
       const stv = server.description.topologyVersion;
       return (0, server_description_1.compareTopologyVersion)(stv, etv) < 0;
     }
-    function inActiveTransaction(session, cmd) {
-      return session && session.inTransaction() && !(0, transactions_1.isTransactionCommand)(cmd);
+    function inActiveTransaction(session2, cmd) {
+      return session2 && session2.inTransaction() && !(0, transactions_1.isTransactionCommand)(cmd);
     }
     function isRetryableWritesEnabled(topology) {
       return topology.s.options.retryWrites !== false;
@@ -56850,16 +56850,16 @@ var require_client_bulk_write = __commonJS({
        * @param session - The session.
        * @returns The response.
        */
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         let command;
         if (server.description.type === beta_1.ServerType.LoadBalancer) {
-          if (session) {
+          if (session2) {
             let connection;
-            if (!session.pinnedConnection) {
+            if (!session2.pinnedConnection) {
               connection = await server.pool.checkOut({ timeoutContext });
-              session.pin(connection);
+              session2.pin(connection);
             } else {
-              connection = session.pinnedConnection;
+              connection = session2.pinnedConnection;
             }
             command = this.commandBuilder.buildBatch(connection.hello?.maxMessageSizeBytes, connection.hello?.maxWriteBatchSize, connection.hello?.maxBsonObjectSize);
           } else {
@@ -56874,7 +56874,7 @@ var require_client_bulk_write = __commonJS({
         if (!this.canRetryWrite) {
           this.options.willRetryWrite = false;
         }
-        return await super.executeCommand(server, session, command, timeoutContext, responses_1.ClientBulkWriteCursorResponse);
+        return await super.executeCommand(server, session2, command, timeoutContext, responses_1.ClientBulkWriteCursorResponse);
       }
     };
     exports2.ClientBulkWriteOperation = ClientBulkWriteOperation;
@@ -56925,15 +56925,15 @@ var require_client_bulk_write_cursor = __commonJS({
         });
       }
       /** @internal */
-      async _initialize(session) {
+      async _initialize(session2) {
         const clientBulkWriteOperation = new client_bulk_write_1.ClientBulkWriteOperation(this.commandBuilder, {
           ...this.clientBulkWriteOptions,
           ...this.cursorOptions,
-          session
+          session: session2
         });
         const response = await (0, execute_operation_1.executeOperation)(this.client, clientBulkWriteOperation, this.timeoutContext);
         this.cursorResponse = response;
-        return { server: clientBulkWriteOperation.server, session, response };
+        return { server: clientBulkWriteOperation.server, session: session2, response };
       }
     };
     exports2.ClientBulkWriteCursor = ClientBulkWriteCursor;
@@ -57733,8 +57733,8 @@ var require_topology = __commonJS({
           timeout = timeout_1.Timeout.expires(options.serverSelectionTimeoutMS ?? 0);
         }
         const isSharded = this.description.type === common_1.TopologyType.Sharded;
-        const session = options.session;
-        const transaction = session && session.transaction;
+        const session2 = options.session;
+        const transaction = session2 && session2.transaction;
         if (isSharded && transaction && transaction.server) {
           if (this.client.mongoLogger?.willLog(mongo_logger_1.MongoLoggableComponent.SERVER_SELECTION, mongo_logger_1.SeverityLevel.DEBUG)) {
             this.client.mongoLogger?.debug(mongo_logger_1.MongoLoggableComponent.SERVER_SELECTION, new server_selection_events_1.ServerSelectionSucceededEvent(selector, this.description, transaction.server.pool.address, options.operationName));
@@ -58333,7 +58333,7 @@ var require_mongo_client = __commonJS({
         const activeCursorCloses = Array.from(this.s.activeCursors, (cursor) => cursor.close());
         this.s.activeCursors.clear();
         await Promise.all(activeCursorCloses);
-        const activeSessionEnds = Array.from(this.s.activeSessions, (session) => session.endSession());
+        const activeSessionEnds = Array.from(this.s.activeSessions, (session2) => session2.endSession());
         this.s.activeSessions.clear();
         await Promise.all(activeSessionEnds);
         if (this.topology == null) {
@@ -58408,12 +58408,12 @@ var require_mongo_client = __commonJS({
        * MongoClient it was started from.
        */
       startSession(options) {
-        const session = new sessions_1.ClientSession(this, this.s.sessionPool, { explicit: true, ...options }, this.options);
-        this.s.activeSessions.add(session);
-        session.once("ended", () => {
-          this.s.activeSessions.delete(session);
+        const session2 = new sessions_1.ClientSession(this, this.s.sessionPool, { explicit: true, ...options }, this.options);
+        this.s.activeSessions.add(session2);
+        session2.once("ended", () => {
+          this.s.activeSessions.delete(session2);
         });
-        return session;
+        return session2;
       }
       async withSession(optionsOrExecutor, executor) {
         const options = {
@@ -58426,12 +58426,12 @@ var require_mongo_client = __commonJS({
         if (withSessionCallback == null) {
           throw new error_1.MongoInvalidArgumentError("Missing required callback parameter");
         }
-        const session = this.startSession(options);
+        const session2 = this.startSession(options);
         try {
-          return await withSessionCallback(session);
+          return await withSessionCallback(session2);
         } finally {
           try {
-            await session.endSession();
+            await session2.endSession();
           } catch (error) {
             (0, utils_1.squashError)(error);
           }
@@ -59460,14 +59460,14 @@ var require_command = __commonJS({
         }
         return super.canRetryWrite;
       }
-      async executeCommand(server, session, cmd, timeoutContext, responseType) {
+      async executeCommand(server, session2, cmd, timeoutContext, responseType) {
         this.server = server;
         const options = {
           ...this.options,
           ...this.bsonOptions,
           timeoutContext,
           readPreference: this.readPreference,
-          session
+          session: session2
         };
         const serverWireVersion = (0, utils_1.maxWireVersion)(server);
         const inTransaction = this.session && this.session.inTransaction();
@@ -59522,7 +59522,7 @@ var require_delete = __commonJS({
         }
         return this.statements.every((op) => op.limit != null ? op.limit > 0 : true);
       }
-      async execute(server, session, timeoutContext) {
+      async execute(server, session2, timeoutContext) {
         const options = this.options ?? {};
         const ordered = typeof options.ordered === "boolean" ? options.ordered : true;
         const command = {
@@ -59542,7 +59542,7 @@ var require_delete = __commonJS({
             throw new error_1.MongoCompatibilityError(`hint is not supported with unacknowledged writes`);
           }
         }
-        const res = await super.executeCommand(server, session, command, timeoutContext);
+        const res = await super.executeCommand(server, session2, command, timeoutContext);
         return res;
       }
     };
@@ -59551,8 +59551,8 @@ var require_delete = __commonJS({
       constructor(collection, filter, options) {
         super(collection.s.namespace, [makeDeleteStatement(filter, { ...options, limit: 1 })], options);
       }
-      async execute(server, session, timeoutContext) {
-        const res = await super.execute(server, session, timeoutContext);
+      async execute(server, session2, timeoutContext) {
+        const res = await super.execute(server, session2, timeoutContext);
         if (this.explain)
           return res;
         if (res.code)
@@ -59570,8 +59570,8 @@ var require_delete = __commonJS({
       constructor(collection, filter, options) {
         super(collection.s.namespace, [makeDeleteStatement(filter, options)], options);
       }
-      async execute(server, session, timeoutContext) {
-        const res = await super.execute(server, session, timeoutContext);
+      async execute(server, session2, timeoutContext) {
+        const res = await super.execute(server, session2, timeoutContext);
         if (this.explain)
           return res;
         if (res.code)
@@ -60060,9 +60060,9 @@ var require_common3 = __commonJS({
       get commandName() {
         return "bulkWrite";
       }
-      async execute(_server, session, timeoutContext) {
+      async execute(_server, session2, timeoutContext) {
         if (this.options.session == null) {
-          this.options.session = session;
+          this.options.session = session2;
         }
         return await executeCommands(this.bulkOperation, { ...this.options, timeoutContext });
       }
@@ -64420,15 +64420,15 @@ var require_queryHelpers = __commonJS({
       if (options.lean != null) {
         pop.filter((p) => (p && p.options && p.options.lean) == null).forEach(makeLean(options.lean));
       }
-      const session = query && query.options && query.options.session || null;
-      if (session != null) {
+      const session2 = query && query.options && query.options.session || null;
+      if (session2 != null) {
         pop.forEach((path) => {
           if (path.options == null) {
-            path.options = { session };
+            path.options = { session: session2 };
             return;
           }
           if (!("session" in path.options)) {
-            path.options.session = session;
+            path.options.session = session2;
           }
         });
       }
@@ -66894,7 +66894,7 @@ var require_document2 = __commonJS({
       args.unshift({ _id: this._doc._id });
       return this.constructor.replaceOne.apply(this.constructor, args);
     };
-    Document.prototype.$session = function $session(session) {
+    Document.prototype.$session = function $session(session2) {
       if (arguments.length === 0) {
         if (this.$__.session != null && this.$__.session.hasEnded) {
           this.$__.session = null;
@@ -66902,20 +66902,20 @@ var require_document2 = __commonJS({
         }
         return this.$__.session;
       }
-      if (session != null && session.hasEnded) {
+      if (session2 != null && session2.hasEnded) {
         throw new MongooseError("Cannot set a document's session to a session that has ended. Make sure you haven't called `endSession()` on the session you are passing to `$session()`.");
       }
-      if (session == null && this.$__.session == null) {
+      if (session2 == null && this.$__.session == null) {
         return;
       }
-      this.$__.session = session;
+      this.$__.session = session2;
       if (!this.$isSubdocument) {
         const subdocs = this.$getAllSubdocs();
         for (const child of subdocs) {
-          child.$session(session);
+          child.$session(session2);
         }
       }
-      return session;
+      return session2;
     };
     Document.prototype.$timestamps = function $timestamps(value) {
       if (arguments.length === 0) {
@@ -69009,14 +69009,14 @@ var require_document2 = __commonJS({
         });
       }
       if (this.$session() != null) {
-        const session = this.$session();
+        const session2 = this.$session();
         paths.forEach((path) => {
           if (path.options == null) {
-            path.options = { session };
+            path.options = { session: session2 };
             return;
           }
           if (!("session" in path.options)) {
-            path.options.session = session;
+            path.options.session = session2;
           }
         });
       }
@@ -74663,14 +74663,14 @@ var require_trackTransaction = __commonJS({
     var utils = require_utils6();
     module2.exports = function trackTransaction(schema) {
       schema.pre("save", function trackTransactionPreSave() {
-        const session = this.$session();
-        if (session == null) {
+        const session2 = this.$session();
+        if (session2 == null) {
           return;
         }
-        if (session.transaction == null || session[sessionNewDocuments] == null) {
+        if (session2.transaction == null || session2[sessionNewDocuments] == null) {
           return;
         }
-        if (!session[sessionNewDocuments].has(this)) {
+        if (!session2[sessionNewDocuments].has(this)) {
           const initialState = {};
           if (this.isNew) {
             initialState.isNew = true;
@@ -74680,7 +74680,7 @@ var require_trackTransaction = __commonJS({
           }
           initialState.modifiedPaths = new Set(Object.keys(this.$__.activePaths.getStatePaths("modify")));
           initialState.atomics = _getAtomics(this);
-          session[sessionNewDocuments].set(this, initialState);
+          session2[sessionNewDocuments].set(this, initialState);
         }
       });
     };
@@ -80009,41 +80009,41 @@ var require_connection2 = __commonJS({
         throw new MongooseError("Connection.prototype.startSession() no longer accepts a callback");
       }
       await this._waitForConnect();
-      const session = this.client.startSession(options);
-      return session;
+      const session2 = this.client.startSession(options);
+      return session2;
     };
     Connection.prototype.transaction = function transaction(fn, options) {
-      return this.startSession().then((session) => {
-        session[sessionNewDocuments] = /* @__PURE__ */ new Map();
-        return session.withTransaction(() => _wrapUserTransaction(fn, session, this.base), options).then((res) => {
-          delete session[sessionNewDocuments];
+      return this.startSession().then((session2) => {
+        session2[sessionNewDocuments] = /* @__PURE__ */ new Map();
+        return session2.withTransaction(() => _wrapUserTransaction(fn, session2, this.base), options).then((res) => {
+          delete session2[sessionNewDocuments];
           return res;
         }).catch((err) => {
-          delete session[sessionNewDocuments];
+          delete session2[sessionNewDocuments];
           throw err;
         }).finally(() => {
-          session.endSession().catch(() => {
+          session2.endSession().catch(() => {
           });
         });
       });
     };
-    async function _wrapUserTransaction(fn, session, mongoose4) {
+    async function _wrapUserTransaction(fn, session2, mongoose4) {
       try {
-        const res = mongoose4.transactionAsyncLocalStorage == null ? await fn(session) : await new Promise((resolve) => {
+        const res = mongoose4.transactionAsyncLocalStorage == null ? await fn(session2) : await new Promise((resolve) => {
           mongoose4.transactionAsyncLocalStorage.run(
-            { session },
-            () => resolve(fn(session))
+            { session: session2 },
+            () => resolve(fn(session2))
           );
         });
         return res;
       } catch (err) {
-        _resetSessionDocuments(session);
+        _resetSessionDocuments(session2);
         throw err;
       }
     }
-    function _resetSessionDocuments(session) {
-      for (const doc of session[sessionNewDocuments].keys()) {
-        const state = session[sessionNewDocuments].get(doc);
+    function _resetSessionDocuments(session2) {
+      for (const doc of session2[sessionNewDocuments].keys()) {
+        const state = session2[sessionNewDocuments].get(doc);
         if (state.hasOwnProperty("isNew")) {
           doc.$isNew = state.isNew;
         }
@@ -84095,7 +84095,7 @@ var require_query = __commonJS({
       }
       return `${this.model.modelName}.${this.op}()`;
     };
-    Query.prototype.session = function session(v) {
+    Query.prototype.session = function session2(v) {
       if (v == null) {
         delete this.options.session;
       }
@@ -86498,11 +86498,11 @@ var require_aggregate2 = __commonJS({
       this.options.hint = value;
       return this;
     };
-    Aggregate.prototype.session = function(session) {
-      if (session == null) {
+    Aggregate.prototype.session = function(session2) {
+      if (session2 == null) {
         delete this.options.session;
       } else {
-        this.options.session = session;
+        this.options.session = session2;
       }
       return this;
     };
@@ -89703,10 +89703,10 @@ var require_model = __commonJS({
       if ("checkKeys" in options) {
         saveOptions.checkKeys = options.checkKeys;
       }
-      const session = this.$session();
+      const session2 = this.$session();
       const asyncLocalStorage = this[modelDbSymbol].base.transactionAsyncLocalStorage?.getStore();
-      if (session != null) {
-        saveOptions.session = session;
+      if (session2 != null) {
+        saveOptions.session = session2;
       } else if (!options.hasOwnProperty("session") && asyncLocalStorage?.session != null) {
         saveOptions.session = asyncLocalStorage.session;
       }
@@ -92906,6 +92906,2077 @@ var require_cli_options = __commonJS({
   }
 });
 
+// node_modules/pause/index.js
+var require_pause = __commonJS({
+  "node_modules/pause/index.js"(exports2, module2) {
+    module2.exports = function(obj) {
+      var onData, onEnd, events = [];
+      obj.on("data", onData = function(data, encoding) {
+        events.push(["data", data, encoding]);
+      });
+      obj.on("end", onEnd = function(data, encoding) {
+        events.push(["end", data, encoding]);
+      });
+      return {
+        end: function() {
+          obj.removeListener("data", onData);
+          obj.removeListener("end", onEnd);
+        },
+        resume: function() {
+          this.end();
+          for (var i = 0, len = events.length; i < len; ++i) {
+            obj.emit.apply(obj, events[i]);
+          }
+        }
+      };
+    };
+  }
+});
+
+// node_modules/passport-strategy/lib/strategy.js
+var require_strategy = __commonJS({
+  "node_modules/passport-strategy/lib/strategy.js"(exports2, module2) {
+    function Strategy() {
+    }
+    Strategy.prototype.authenticate = function(req, options) {
+      throw new Error("Strategy#authenticate must be overridden by subclass");
+    };
+    module2.exports = Strategy;
+  }
+});
+
+// node_modules/passport-strategy/lib/index.js
+var require_lib9 = __commonJS({
+  "node_modules/passport-strategy/lib/index.js"(exports2, module2) {
+    var Strategy = require_strategy();
+    exports2 = module2.exports = Strategy;
+    exports2.Strategy = Strategy;
+  }
+});
+
+// node_modules/passport/lib/strategies/session.js
+var require_session = __commonJS({
+  "node_modules/passport/lib/strategies/session.js"(exports2, module2) {
+    var pause = require_pause();
+    var util = require("util");
+    var Strategy = require_lib9();
+    function SessionStrategy(options, deserializeUser) {
+      if (typeof options == "function") {
+        deserializeUser = options;
+        options = void 0;
+      }
+      options = options || {};
+      Strategy.call(this);
+      this.name = "session";
+      this._key = options.key || "passport";
+      this._deserializeUser = deserializeUser;
+    }
+    util.inherits(SessionStrategy, Strategy);
+    SessionStrategy.prototype.authenticate = function(req, options) {
+      if (!req.session) {
+        return this.error(new Error("Login sessions require session support. Did you forget to use `express-session` middleware?"));
+      }
+      options = options || {};
+      var self2 = this, su;
+      if (req.session[this._key]) {
+        su = req.session[this._key].user;
+      }
+      if (su || su === 0) {
+        var paused = options.pauseStream ? pause(req) : null;
+        this._deserializeUser(su, req, function(err, user) {
+          if (err) {
+            return self2.error(err);
+          }
+          if (!user) {
+            delete req.session[self2._key].user;
+          } else {
+            var property = req._userProperty || "user";
+            req[property] = user;
+          }
+          self2.pass();
+          if (paused) {
+            paused.resume();
+          }
+        });
+      } else {
+        self2.pass();
+      }
+    };
+    module2.exports = SessionStrategy;
+  }
+});
+
+// node_modules/utils-merge/index.js
+var require_utils_merge = __commonJS({
+  "node_modules/utils-merge/index.js"(exports2, module2) {
+    exports2 = module2.exports = function(a, b) {
+      if (a && b) {
+        for (var key in b) {
+          a[key] = b[key];
+        }
+      }
+      return a;
+    };
+  }
+});
+
+// node_modules/passport/lib/sessionmanager.js
+var require_sessionmanager = __commonJS({
+  "node_modules/passport/lib/sessionmanager.js"(exports2, module2) {
+    var merge = require_utils_merge();
+    function SessionManager(options, serializeUser) {
+      if (typeof options == "function") {
+        serializeUser = options;
+        options = void 0;
+      }
+      options = options || {};
+      this._key = options.key || "passport";
+      this._serializeUser = serializeUser;
+    }
+    SessionManager.prototype.logIn = function(req, user, options, cb) {
+      if (typeof options == "function") {
+        cb = options;
+        options = {};
+      }
+      options = options || {};
+      if (!req.session) {
+        return cb(new Error("Login sessions require session support. Did you forget to use `express-session` middleware?"));
+      }
+      var self2 = this;
+      var prevSession = req.session;
+      req.session.regenerate(function(err) {
+        if (err) {
+          return cb(err);
+        }
+        self2._serializeUser(user, req, function(err2, obj) {
+          if (err2) {
+            return cb(err2);
+          }
+          if (options.keepSessionInfo) {
+            merge(req.session, prevSession);
+          }
+          if (!req.session[self2._key]) {
+            req.session[self2._key] = {};
+          }
+          req.session[self2._key].user = obj;
+          req.session.save(function(err3) {
+            if (err3) {
+              return cb(err3);
+            }
+            cb();
+          });
+        });
+      });
+    };
+    SessionManager.prototype.logOut = function(req, options, cb) {
+      if (typeof options == "function") {
+        cb = options;
+        options = {};
+      }
+      options = options || {};
+      if (!req.session) {
+        return cb(new Error("Login sessions require session support. Did you forget to use `express-session` middleware?"));
+      }
+      var self2 = this;
+      if (req.session[this._key]) {
+        delete req.session[this._key].user;
+      }
+      var prevSession = req.session;
+      req.session.save(function(err) {
+        if (err) {
+          return cb(err);
+        }
+        req.session.regenerate(function(err2) {
+          if (err2) {
+            return cb(err2);
+          }
+          if (options.keepSessionInfo) {
+            merge(req.session, prevSession);
+          }
+          cb();
+        });
+      });
+    };
+    module2.exports = SessionManager;
+  }
+});
+
+// node_modules/passport/lib/http/request.js
+var require_request3 = __commonJS({
+  "node_modules/passport/lib/http/request.js"(exports2, module2) {
+    var req = exports2 = module2.exports = {};
+    req.login = req.logIn = function(user, options, done) {
+      if (typeof options == "function") {
+        done = options;
+        options = {};
+      }
+      options = options || {};
+      var property = this._userProperty || "user";
+      var session2 = options.session === void 0 ? true : options.session;
+      this[property] = user;
+      if (session2 && this._sessionManager) {
+        if (typeof done != "function") {
+          throw new Error("req#login requires a callback function");
+        }
+        var self2 = this;
+        this._sessionManager.logIn(this, user, options, function(err) {
+          if (err) {
+            self2[property] = null;
+            return done(err);
+          }
+          done();
+        });
+      } else {
+        done && done();
+      }
+    };
+    req.logout = req.logOut = function(options, done) {
+      if (typeof options == "function") {
+        done = options;
+        options = {};
+      }
+      options = options || {};
+      var property = this._userProperty || "user";
+      this[property] = null;
+      if (this._sessionManager) {
+        if (typeof done != "function") {
+          throw new Error("req#logout requires a callback function");
+        }
+        this._sessionManager.logOut(this, options, done);
+      } else {
+        done && done();
+      }
+    };
+    req.isAuthenticated = function() {
+      var property = this._userProperty || "user";
+      return this[property] ? true : false;
+    };
+    req.isUnauthenticated = function() {
+      return !this.isAuthenticated();
+    };
+  }
+});
+
+// node_modules/passport/lib/middleware/initialize.js
+var require_initialize = __commonJS({
+  "node_modules/passport/lib/middleware/initialize.js"(exports2, module2) {
+    var IncomingMessageExt = require_request3();
+    module2.exports = function initialize(passport2, options) {
+      options = options || {};
+      return function initialize2(req, res, next) {
+        req.login = req.logIn = req.logIn || IncomingMessageExt.logIn;
+        req.logout = req.logOut = req.logOut || IncomingMessageExt.logOut;
+        req.isAuthenticated = req.isAuthenticated || IncomingMessageExt.isAuthenticated;
+        req.isUnauthenticated = req.isUnauthenticated || IncomingMessageExt.isUnauthenticated;
+        req._sessionManager = passport2._sm;
+        if (options.userProperty) {
+          req._userProperty = options.userProperty;
+        }
+        var compat = options.compat === void 0 ? true : options.compat;
+        if (compat) {
+          passport2._userProperty = options.userProperty || "user";
+          req._passport = {};
+          req._passport.instance = passport2;
+        }
+        next();
+      };
+    };
+  }
+});
+
+// node_modules/passport/lib/errors/authenticationerror.js
+var require_authenticationerror = __commonJS({
+  "node_modules/passport/lib/errors/authenticationerror.js"(exports2, module2) {
+    function AuthenticationError(message, status) {
+      Error.call(this);
+      Error.captureStackTrace(this, arguments.callee);
+      this.name = "AuthenticationError";
+      this.message = message;
+      this.status = status || 401;
+    }
+    AuthenticationError.prototype.__proto__ = Error.prototype;
+    module2.exports = AuthenticationError;
+  }
+});
+
+// node_modules/passport/lib/middleware/authenticate.js
+var require_authenticate = __commonJS({
+  "node_modules/passport/lib/middleware/authenticate.js"(exports2, module2) {
+    var http = require("http");
+    var IncomingMessageExt = require_request3();
+    var AuthenticationError = require_authenticationerror();
+    module2.exports = function authenticate(passport2, name, options, callback) {
+      if (typeof options == "function") {
+        callback = options;
+        options = {};
+      }
+      options = options || {};
+      var multi = true;
+      if (!Array.isArray(name)) {
+        name = [name];
+        multi = false;
+      }
+      return function authenticate2(req, res, next) {
+        req.login = req.logIn = req.logIn || IncomingMessageExt.logIn;
+        req.logout = req.logOut = req.logOut || IncomingMessageExt.logOut;
+        req.isAuthenticated = req.isAuthenticated || IncomingMessageExt.isAuthenticated;
+        req.isUnauthenticated = req.isUnauthenticated || IncomingMessageExt.isUnauthenticated;
+        req._sessionManager = passport2._sm;
+        var failures = [];
+        function allFailed() {
+          if (callback) {
+            if (!multi) {
+              return callback(null, false, failures[0].challenge, failures[0].status);
+            } else {
+              var challenges = failures.map(function(f) {
+                return f.challenge;
+              });
+              var statuses = failures.map(function(f) {
+                return f.status;
+              });
+              return callback(null, false, challenges, statuses);
+            }
+          }
+          var failure = failures[0] || {}, challenge = failure.challenge || {}, msg;
+          if (options.failureFlash) {
+            var flash = options.failureFlash;
+            if (typeof flash == "string") {
+              flash = { type: "error", message: flash };
+            }
+            flash.type = flash.type || "error";
+            var type = flash.type || challenge.type || "error";
+            msg = flash.message || challenge.message || challenge;
+            if (typeof msg == "string") {
+              req.flash(type, msg);
+            }
+          }
+          if (options.failureMessage) {
+            msg = options.failureMessage;
+            if (typeof msg == "boolean") {
+              msg = challenge.message || challenge;
+            }
+            if (typeof msg == "string") {
+              req.session.messages = req.session.messages || [];
+              req.session.messages.push(msg);
+            }
+          }
+          if (options.failureRedirect) {
+            return res.redirect(options.failureRedirect);
+          }
+          var rchallenge = [], rstatus, status;
+          for (var j = 0, len = failures.length; j < len; j++) {
+            failure = failures[j];
+            challenge = failure.challenge;
+            status = failure.status;
+            rstatus = rstatus || status;
+            if (typeof challenge == "string") {
+              rchallenge.push(challenge);
+            }
+          }
+          res.statusCode = rstatus || 401;
+          if (res.statusCode == 401 && rchallenge.length) {
+            res.setHeader("WWW-Authenticate", rchallenge);
+          }
+          if (options.failWithError) {
+            return next(new AuthenticationError(http.STATUS_CODES[res.statusCode], rstatus));
+          }
+          res.end(http.STATUS_CODES[res.statusCode]);
+        }
+        (function attempt(i) {
+          var layer = name[i];
+          if (!layer) {
+            return allFailed();
+          }
+          var strategy, prototype;
+          if (typeof layer.authenticate == "function") {
+            strategy = layer;
+          } else {
+            prototype = passport2._strategy(layer);
+            if (!prototype) {
+              return next(new Error('Unknown authentication strategy "' + layer + '"'));
+            }
+            strategy = Object.create(prototype);
+          }
+          strategy.success = function(user, info) {
+            if (callback) {
+              return callback(null, user, info);
+            }
+            info = info || {};
+            var msg;
+            if (options.successFlash) {
+              var flash = options.successFlash;
+              if (typeof flash == "string") {
+                flash = { type: "success", message: flash };
+              }
+              flash.type = flash.type || "success";
+              var type = flash.type || info.type || "success";
+              msg = flash.message || info.message || info;
+              if (typeof msg == "string") {
+                req.flash(type, msg);
+              }
+            }
+            if (options.successMessage) {
+              msg = options.successMessage;
+              if (typeof msg == "boolean") {
+                msg = info.message || info;
+              }
+              if (typeof msg == "string") {
+                req.session.messages = req.session.messages || [];
+                req.session.messages.push(msg);
+              }
+            }
+            if (options.assignProperty) {
+              req[options.assignProperty] = user;
+              if (options.authInfo !== false) {
+                passport2.transformAuthInfo(info, req, function(err, tinfo) {
+                  if (err) {
+                    return next(err);
+                  }
+                  req.authInfo = tinfo;
+                  next();
+                });
+              } else {
+                next();
+              }
+              return;
+            }
+            req.logIn(user, options, function(err) {
+              if (err) {
+                return next(err);
+              }
+              function complete() {
+                if (options.successReturnToOrRedirect) {
+                  var url = options.successReturnToOrRedirect;
+                  if (req.session && req.session.returnTo) {
+                    url = req.session.returnTo;
+                    delete req.session.returnTo;
+                  }
+                  return res.redirect(url);
+                }
+                if (options.successRedirect) {
+                  return res.redirect(options.successRedirect);
+                }
+                next();
+              }
+              if (options.authInfo !== false) {
+                passport2.transformAuthInfo(info, req, function(err2, tinfo) {
+                  if (err2) {
+                    return next(err2);
+                  }
+                  req.authInfo = tinfo;
+                  complete();
+                });
+              } else {
+                complete();
+              }
+            });
+          };
+          strategy.fail = function(challenge, status) {
+            if (typeof challenge == "number") {
+              status = challenge;
+              challenge = void 0;
+            }
+            failures.push({ challenge, status });
+            attempt(i + 1);
+          };
+          strategy.redirect = function(url, status) {
+            res.statusCode = status || 302;
+            res.setHeader("Location", url);
+            res.setHeader("Content-Length", "0");
+            res.end();
+          };
+          strategy.pass = function() {
+            next();
+          };
+          strategy.error = function(err) {
+            if (callback) {
+              return callback(err);
+            }
+            next(err);
+          };
+          strategy.authenticate(req, options);
+        })(0);
+      };
+    };
+  }
+});
+
+// node_modules/passport/lib/framework/connect.js
+var require_connect2 = __commonJS({
+  "node_modules/passport/lib/framework/connect.js"(exports2, module2) {
+    var initialize = require_initialize();
+    var authenticate = require_authenticate();
+    exports2 = module2.exports = function() {
+      return {
+        initialize,
+        authenticate
+      };
+    };
+  }
+});
+
+// node_modules/passport/lib/authenticator.js
+var require_authenticator = __commonJS({
+  "node_modules/passport/lib/authenticator.js"(exports2, module2) {
+    var SessionStrategy = require_session();
+    var SessionManager = require_sessionmanager();
+    function Authenticator() {
+      this._key = "passport";
+      this._strategies = {};
+      this._serializers = [];
+      this._deserializers = [];
+      this._infoTransformers = [];
+      this._framework = null;
+      this.init();
+    }
+    Authenticator.prototype.init = function() {
+      this.framework(require_connect2()());
+      this.use(new SessionStrategy({ key: this._key }, this.deserializeUser.bind(this)));
+      this._sm = new SessionManager({ key: this._key }, this.serializeUser.bind(this));
+    };
+    Authenticator.prototype.use = function(name, strategy) {
+      if (!strategy) {
+        strategy = name;
+        name = strategy.name;
+      }
+      if (!name) {
+        throw new Error("Authentication strategies must have a name");
+      }
+      this._strategies[name] = strategy;
+      return this;
+    };
+    Authenticator.prototype.unuse = function(name) {
+      delete this._strategies[name];
+      return this;
+    };
+    Authenticator.prototype.framework = function(fw) {
+      this._framework = fw;
+      return this;
+    };
+    Authenticator.prototype.initialize = function(options) {
+      options = options || {};
+      return this._framework.initialize(this, options);
+    };
+    Authenticator.prototype.authenticate = function(strategy, options, callback) {
+      return this._framework.authenticate(this, strategy, options, callback);
+    };
+    Authenticator.prototype.authorize = function(strategy, options, callback) {
+      options = options || {};
+      options.assignProperty = "account";
+      var fn = this._framework.authorize || this._framework.authenticate;
+      return fn(this, strategy, options, callback);
+    };
+    Authenticator.prototype.session = function(options) {
+      return this.authenticate("session", options);
+    };
+    Authenticator.prototype.serializeUser = function(fn, req, done) {
+      if (typeof fn === "function") {
+        return this._serializers.push(fn);
+      }
+      var user = fn;
+      if (typeof req === "function") {
+        done = req;
+        req = void 0;
+      }
+      var stack = this._serializers;
+      (function pass(i, err, obj) {
+        if ("pass" === err) {
+          err = void 0;
+        }
+        if (err || obj || obj === 0) {
+          return done(err, obj);
+        }
+        var layer = stack[i];
+        if (!layer) {
+          return done(new Error("Failed to serialize user into session"));
+        }
+        function serialized(e, o) {
+          pass(i + 1, e, o);
+        }
+        try {
+          var arity = layer.length;
+          if (arity == 3) {
+            layer(req, user, serialized);
+          } else {
+            layer(user, serialized);
+          }
+        } catch (e) {
+          return done(e);
+        }
+      })(0);
+    };
+    Authenticator.prototype.deserializeUser = function(fn, req, done) {
+      if (typeof fn === "function") {
+        return this._deserializers.push(fn);
+      }
+      var obj = fn;
+      if (typeof req === "function") {
+        done = req;
+        req = void 0;
+      }
+      var stack = this._deserializers;
+      (function pass(i, err, user) {
+        if ("pass" === err) {
+          err = void 0;
+        }
+        if (err || user) {
+          return done(err, user);
+        }
+        if (user === null || user === false) {
+          return done(null, false);
+        }
+        var layer = stack[i];
+        if (!layer) {
+          return done(new Error("Failed to deserialize user out of session"));
+        }
+        function deserialized(e, u) {
+          pass(i + 1, e, u);
+        }
+        try {
+          var arity = layer.length;
+          if (arity == 3) {
+            layer(req, obj, deserialized);
+          } else {
+            layer(obj, deserialized);
+          }
+        } catch (e) {
+          return done(e);
+        }
+      })(0);
+    };
+    Authenticator.prototype.transformAuthInfo = function(fn, req, done) {
+      if (typeof fn === "function") {
+        return this._infoTransformers.push(fn);
+      }
+      var info = fn;
+      if (typeof req === "function") {
+        done = req;
+        req = void 0;
+      }
+      var stack = this._infoTransformers;
+      (function pass(i, err, tinfo) {
+        if ("pass" === err) {
+          err = void 0;
+        }
+        if (err || tinfo) {
+          return done(err, tinfo);
+        }
+        var layer = stack[i];
+        if (!layer) {
+          return done(null, info);
+        }
+        function transformed(e, t2) {
+          pass(i + 1, e, t2);
+        }
+        try {
+          var arity = layer.length;
+          if (arity == 1) {
+            var t = layer(info);
+            transformed(null, t);
+          } else if (arity == 3) {
+            layer(req, info, transformed);
+          } else {
+            layer(info, transformed);
+          }
+        } catch (e) {
+          return done(e);
+        }
+      })(0);
+    };
+    Authenticator.prototype._strategy = function(name) {
+      return this._strategies[name];
+    };
+    module2.exports = Authenticator;
+  }
+});
+
+// node_modules/passport/lib/index.js
+var require_lib10 = __commonJS({
+  "node_modules/passport/lib/index.js"(exports2, module2) {
+    var Passport = require_authenticator();
+    var SessionStrategy = require_session();
+    exports2 = module2.exports = new Passport();
+    exports2.Passport = exports2.Authenticator = Passport;
+    exports2.Strategy = require_lib9();
+    exports2.strategies = {};
+    exports2.strategies.SessionStrategy = SessionStrategy;
+  }
+});
+
+// node_modules/express-session/node_modules/ms/index.js
+var require_ms2 = __commonJS({
+  "node_modules/express-session/node_modules/ms/index.js"(exports2, module2) {
+    var s = 1e3;
+    var m = s * 60;
+    var h = m * 60;
+    var d = h * 24;
+    var y = d * 365.25;
+    module2.exports = function(val, options) {
+      options = options || {};
+      var type = typeof val;
+      if (type === "string" && val.length > 0) {
+        return parse(val);
+      } else if (type === "number" && isNaN(val) === false) {
+        return options.long ? fmtLong(val) : fmtShort(val);
+      }
+      throw new Error(
+        "val is not a non-empty string or a valid number. val=" + JSON.stringify(val)
+      );
+    };
+    function parse(str) {
+      str = String(str);
+      if (str.length > 100) {
+        return;
+      }
+      var match = /^((?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|years?|yrs?|y)?$/i.exec(
+        str
+      );
+      if (!match) {
+        return;
+      }
+      var n = parseFloat(match[1]);
+      var type = (match[2] || "ms").toLowerCase();
+      switch (type) {
+        case "years":
+        case "year":
+        case "yrs":
+        case "yr":
+        case "y":
+          return n * y;
+        case "days":
+        case "day":
+        case "d":
+          return n * d;
+        case "hours":
+        case "hour":
+        case "hrs":
+        case "hr":
+        case "h":
+          return n * h;
+        case "minutes":
+        case "minute":
+        case "mins":
+        case "min":
+        case "m":
+          return n * m;
+        case "seconds":
+        case "second":
+        case "secs":
+        case "sec":
+        case "s":
+          return n * s;
+        case "milliseconds":
+        case "millisecond":
+        case "msecs":
+        case "msec":
+        case "ms":
+          return n;
+        default:
+          return void 0;
+      }
+    }
+    function fmtShort(ms) {
+      if (ms >= d) {
+        return Math.round(ms / d) + "d";
+      }
+      if (ms >= h) {
+        return Math.round(ms / h) + "h";
+      }
+      if (ms >= m) {
+        return Math.round(ms / m) + "m";
+      }
+      if (ms >= s) {
+        return Math.round(ms / s) + "s";
+      }
+      return ms + "ms";
+    }
+    function fmtLong(ms) {
+      return plural(ms, d, "day") || plural(ms, h, "hour") || plural(ms, m, "minute") || plural(ms, s, "second") || ms + " ms";
+    }
+    function plural(ms, n, name) {
+      if (ms < n) {
+        return;
+      }
+      if (ms < n * 1.5) {
+        return Math.floor(ms / n) + " " + name;
+      }
+      return Math.ceil(ms / n) + " " + name + "s";
+    }
+  }
+});
+
+// node_modules/express-session/node_modules/debug/src/debug.js
+var require_debug2 = __commonJS({
+  "node_modules/express-session/node_modules/debug/src/debug.js"(exports2, module2) {
+    exports2 = module2.exports = createDebug.debug = createDebug["default"] = createDebug;
+    exports2.coerce = coerce;
+    exports2.disable = disable;
+    exports2.enable = enable;
+    exports2.enabled = enabled;
+    exports2.humanize = require_ms2();
+    exports2.names = [];
+    exports2.skips = [];
+    exports2.formatters = {};
+    var prevTime;
+    function selectColor(namespace) {
+      var hash = 0, i;
+      for (i in namespace) {
+        hash = (hash << 5) - hash + namespace.charCodeAt(i);
+        hash |= 0;
+      }
+      return exports2.colors[Math.abs(hash) % exports2.colors.length];
+    }
+    function createDebug(namespace) {
+      function debug() {
+        if (!debug.enabled) return;
+        var self2 = debug;
+        var curr = +/* @__PURE__ */ new Date();
+        var ms = curr - (prevTime || curr);
+        self2.diff = ms;
+        self2.prev = prevTime;
+        self2.curr = curr;
+        prevTime = curr;
+        var args = new Array(arguments.length);
+        for (var i = 0; i < args.length; i++) {
+          args[i] = arguments[i];
+        }
+        args[0] = exports2.coerce(args[0]);
+        if ("string" !== typeof args[0]) {
+          args.unshift("%O");
+        }
+        var index = 0;
+        args[0] = args[0].replace(/%([a-zA-Z%])/g, function(match, format) {
+          if (match === "%%") return match;
+          index++;
+          var formatter = exports2.formatters[format];
+          if ("function" === typeof formatter) {
+            var val = args[index];
+            match = formatter.call(self2, val);
+            args.splice(index, 1);
+            index--;
+          }
+          return match;
+        });
+        exports2.formatArgs.call(self2, args);
+        var logFn = debug.log || exports2.log || console.log.bind(console);
+        logFn.apply(self2, args);
+      }
+      debug.namespace = namespace;
+      debug.enabled = exports2.enabled(namespace);
+      debug.useColors = exports2.useColors();
+      debug.color = selectColor(namespace);
+      if ("function" === typeof exports2.init) {
+        exports2.init(debug);
+      }
+      return debug;
+    }
+    function enable(namespaces) {
+      exports2.save(namespaces);
+      exports2.names = [];
+      exports2.skips = [];
+      var split = (typeof namespaces === "string" ? namespaces : "").split(/[\s,]+/);
+      var len = split.length;
+      for (var i = 0; i < len; i++) {
+        if (!split[i]) continue;
+        namespaces = split[i].replace(/\*/g, ".*?");
+        if (namespaces[0] === "-") {
+          exports2.skips.push(new RegExp("^" + namespaces.substr(1) + "$"));
+        } else {
+          exports2.names.push(new RegExp("^" + namespaces + "$"));
+        }
+      }
+    }
+    function disable() {
+      exports2.enable("");
+    }
+    function enabled(name) {
+      var i, len;
+      for (i = 0, len = exports2.skips.length; i < len; i++) {
+        if (exports2.skips[i].test(name)) {
+          return false;
+        }
+      }
+      for (i = 0, len = exports2.names.length; i < len; i++) {
+        if (exports2.names[i].test(name)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    function coerce(val) {
+      if (val instanceof Error) return val.stack || val.message;
+      return val;
+    }
+  }
+});
+
+// node_modules/express-session/node_modules/debug/src/browser.js
+var require_browser2 = __commonJS({
+  "node_modules/express-session/node_modules/debug/src/browser.js"(exports2, module2) {
+    exports2 = module2.exports = require_debug2();
+    exports2.log = log;
+    exports2.formatArgs = formatArgs;
+    exports2.save = save;
+    exports2.load = load;
+    exports2.useColors = useColors;
+    exports2.storage = "undefined" != typeof chrome && "undefined" != typeof chrome.storage ? chrome.storage.local : localstorage();
+    exports2.colors = [
+      "lightseagreen",
+      "forestgreen",
+      "goldenrod",
+      "dodgerblue",
+      "darkorchid",
+      "crimson"
+    ];
+    function useColors() {
+      if (typeof window !== "undefined" && window.process && window.process.type === "renderer") {
+        return true;
+      }
+      return typeof document !== "undefined" && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance || // is firebug? http://stackoverflow.com/a/398120/376773
+      typeof window !== "undefined" && window.console && (window.console.firebug || window.console.exception && window.console.table) || // is firefox >= v31?
+      // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/) && parseInt(RegExp.$1, 10) >= 31 || // double check webkit in userAgent just in case we are in a worker
+      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/);
+    }
+    exports2.formatters.j = function(v) {
+      try {
+        return JSON.stringify(v);
+      } catch (err) {
+        return "[UnexpectedJSONParseError]: " + err.message;
+      }
+    };
+    function formatArgs(args) {
+      var useColors2 = this.useColors;
+      args[0] = (useColors2 ? "%c" : "") + this.namespace + (useColors2 ? " %c" : " ") + args[0] + (useColors2 ? "%c " : " ") + "+" + exports2.humanize(this.diff);
+      if (!useColors2) return;
+      var c = "color: " + this.color;
+      args.splice(1, 0, c, "color: inherit");
+      var index = 0;
+      var lastC = 0;
+      args[0].replace(/%[a-zA-Z%]/g, function(match) {
+        if ("%%" === match) return;
+        index++;
+        if ("%c" === match) {
+          lastC = index;
+        }
+      });
+      args.splice(lastC, 0, c);
+    }
+    function log() {
+      return "object" === typeof console && console.log && Function.prototype.apply.call(console.log, console, arguments);
+    }
+    function save(namespaces) {
+      try {
+        if (null == namespaces) {
+          exports2.storage.removeItem("debug");
+        } else {
+          exports2.storage.debug = namespaces;
+        }
+      } catch (e) {
+      }
+    }
+    function load() {
+      var r;
+      try {
+        r = exports2.storage.debug;
+      } catch (e) {
+      }
+      if (!r && typeof process !== "undefined" && "env" in process) {
+        r = process.env.DEBUG;
+      }
+      return r;
+    }
+    exports2.enable(load());
+    function localstorage() {
+      try {
+        return window.localStorage;
+      } catch (e) {
+      }
+    }
+  }
+});
+
+// node_modules/express-session/node_modules/debug/src/node.js
+var require_node4 = __commonJS({
+  "node_modules/express-session/node_modules/debug/src/node.js"(exports2, module2) {
+    var tty = require("tty");
+    var util = require("util");
+    exports2 = module2.exports = require_debug2();
+    exports2.init = init;
+    exports2.log = log;
+    exports2.formatArgs = formatArgs;
+    exports2.save = save;
+    exports2.load = load;
+    exports2.useColors = useColors;
+    exports2.colors = [6, 2, 3, 4, 5, 1];
+    exports2.inspectOpts = Object.keys(process.env).filter(function(key) {
+      return /^debug_/i.test(key);
+    }).reduce(function(obj, key) {
+      var prop = key.substring(6).toLowerCase().replace(/_([a-z])/g, function(_, k) {
+        return k.toUpperCase();
+      });
+      var val = process.env[key];
+      if (/^(yes|on|true|enabled)$/i.test(val)) val = true;
+      else if (/^(no|off|false|disabled)$/i.test(val)) val = false;
+      else if (val === "null") val = null;
+      else val = Number(val);
+      obj[prop] = val;
+      return obj;
+    }, {});
+    var fd = parseInt(process.env.DEBUG_FD, 10) || 2;
+    if (1 !== fd && 2 !== fd) {
+      util.deprecate(function() {
+      }, "except for stderr(2) and stdout(1), any other usage of DEBUG_FD is deprecated. Override debug.log if you want to use a different log function (https://git.io/debug_fd)")();
+    }
+    var stream = 1 === fd ? process.stdout : 2 === fd ? process.stderr : createWritableStdioStream(fd);
+    function useColors() {
+      return "colors" in exports2.inspectOpts ? Boolean(exports2.inspectOpts.colors) : tty.isatty(fd);
+    }
+    exports2.formatters.o = function(v) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v, this.inspectOpts).split("\n").map(function(str) {
+        return str.trim();
+      }).join(" ");
+    };
+    exports2.formatters.O = function(v) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v, this.inspectOpts);
+    };
+    function formatArgs(args) {
+      var name = this.namespace;
+      var useColors2 = this.useColors;
+      if (useColors2) {
+        var c = this.color;
+        var prefix = "  \x1B[3" + c + ";1m" + name + " \x1B[0m";
+        args[0] = prefix + args[0].split("\n").join("\n" + prefix);
+        args.push("\x1B[3" + c + "m+" + exports2.humanize(this.diff) + "\x1B[0m");
+      } else {
+        args[0] = (/* @__PURE__ */ new Date()).toUTCString() + " " + name + " " + args[0];
+      }
+    }
+    function log() {
+      return stream.write(util.format.apply(util, arguments) + "\n");
+    }
+    function save(namespaces) {
+      if (null == namespaces) {
+        delete process.env.DEBUG;
+      } else {
+        process.env.DEBUG = namespaces;
+      }
+    }
+    function load() {
+      return process.env.DEBUG;
+    }
+    function createWritableStdioStream(fd2) {
+      var stream2;
+      var tty_wrap = process.binding("tty_wrap");
+      switch (tty_wrap.guessHandleType(fd2)) {
+        case "TTY":
+          stream2 = new tty.WriteStream(fd2);
+          stream2._type = "tty";
+          if (stream2._handle && stream2._handle.unref) {
+            stream2._handle.unref();
+          }
+          break;
+        case "FILE":
+          var fs = require("fs");
+          stream2 = new fs.SyncWriteStream(fd2, { autoClose: false });
+          stream2._type = "fs";
+          break;
+        case "PIPE":
+        case "TCP":
+          var net = require("net");
+          stream2 = new net.Socket({
+            fd: fd2,
+            readable: false,
+            writable: true
+          });
+          stream2.readable = false;
+          stream2.read = null;
+          stream2._type = "pipe";
+          if (stream2._handle && stream2._handle.unref) {
+            stream2._handle.unref();
+          }
+          break;
+        default:
+          throw new Error("Implement me. Unknown stream file type!");
+      }
+      stream2.fd = fd2;
+      stream2._isStdio = true;
+      return stream2;
+    }
+    function init(debug) {
+      debug.inspectOpts = {};
+      var keys = Object.keys(exports2.inspectOpts);
+      for (var i = 0; i < keys.length; i++) {
+        debug.inspectOpts[keys[i]] = exports2.inspectOpts[keys[i]];
+      }
+    }
+    exports2.enable(load());
+  }
+});
+
+// node_modules/express-session/node_modules/debug/src/index.js
+var require_src2 = __commonJS({
+  "node_modules/express-session/node_modules/debug/src/index.js"(exports2, module2) {
+    if (typeof process !== "undefined" && process.type === "renderer") {
+      module2.exports = require_browser2();
+    } else {
+      module2.exports = require_node4();
+    }
+  }
+});
+
+// node_modules/on-headers/index.js
+var require_on_headers = __commonJS({
+  "node_modules/on-headers/index.js"(exports2, module2) {
+    "use strict";
+    module2.exports = onHeaders;
+    function createWriteHead(prevWriteHead, listener) {
+      var fired = false;
+      return function writeHead(statusCode) {
+        var args = setWriteHeadHeaders.apply(this, arguments);
+        if (!fired) {
+          fired = true;
+          listener.call(this);
+          if (typeof args[0] === "number" && this.statusCode !== args[0]) {
+            args[0] = this.statusCode;
+            args.length = 1;
+          }
+        }
+        return prevWriteHead.apply(this, args);
+      };
+    }
+    function onHeaders(res, listener) {
+      if (!res) {
+        throw new TypeError("argument res is required");
+      }
+      if (typeof listener !== "function") {
+        throw new TypeError("argument listener must be a function");
+      }
+      res.writeHead = createWriteHead(res.writeHead, listener);
+    }
+    function setHeadersFromArray(res, headers) {
+      for (var i = 0; i < headers.length; i++) {
+        res.setHeader(headers[i][0], headers[i][1]);
+      }
+    }
+    function setHeadersFromObject(res, headers) {
+      var keys = Object.keys(headers);
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        if (k) res.setHeader(k, headers[k]);
+      }
+    }
+    function setWriteHeadHeaders(statusCode) {
+      var length = arguments.length;
+      var headerIndex = length > 1 && typeof arguments[1] === "string" ? 2 : 1;
+      var headers = length >= headerIndex + 1 ? arguments[headerIndex] : void 0;
+      this.statusCode = statusCode;
+      if (Array.isArray(headers)) {
+        setHeadersFromArray(this, headers);
+      } else if (headers) {
+        setHeadersFromObject(this, headers);
+      }
+      var args = new Array(Math.min(length, headerIndex));
+      for (var i = 0; i < args.length; i++) {
+        args[i] = arguments[i];
+      }
+      return args;
+    }
+  }
+});
+
+// node_modules/express-session/node_modules/cookie-signature/index.js
+var require_cookie_signature2 = __commonJS({
+  "node_modules/express-session/node_modules/cookie-signature/index.js"(exports2) {
+    var crypto = require("crypto");
+    exports2.sign = function(val, secret) {
+      if ("string" !== typeof val) throw new TypeError("Cookie value must be provided as a string.");
+      if (null == secret) throw new TypeError("Secret key must be provided.");
+      return val + "." + crypto.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
+    };
+    exports2.unsign = function(val, secret) {
+      if ("string" !== typeof val) throw new TypeError("Signed cookie string must be provided.");
+      if (null == secret) throw new TypeError("Secret key must be provided.");
+      var str = val.slice(0, val.lastIndexOf(".")), mac = exports2.sign(str, secret);
+      return sha1(mac) == sha1(val) ? str : false;
+    };
+    function sha1(str) {
+      return crypto.createHash("sha1").update(str).digest("hex");
+    }
+  }
+});
+
+// node_modules/random-bytes/index.js
+var require_random_bytes = __commonJS({
+  "node_modules/random-bytes/index.js"(exports2, module2) {
+    "use strict";
+    var crypto = require("crypto");
+    var generateAttempts = crypto.randomBytes === crypto.pseudoRandomBytes ? 1 : 3;
+    module2.exports = randomBytes;
+    module2.exports.sync = randomBytesSync;
+    function randomBytes(size, callback) {
+      if (callback !== void 0 && typeof callback !== "function") {
+        throw new TypeError("argument callback must be a function");
+      }
+      if (!callback && !global.Promise) {
+        throw new TypeError("argument callback is required");
+      }
+      if (callback) {
+        return generateRandomBytes(size, generateAttempts, callback);
+      }
+      return new Promise(function executor(resolve, reject) {
+        generateRandomBytes(size, generateAttempts, function onRandomBytes(err, str) {
+          if (err) return reject(err);
+          resolve(str);
+        });
+      });
+    }
+    function randomBytesSync(size) {
+      var err = null;
+      for (var i = 0; i < generateAttempts; i++) {
+        try {
+          return crypto.randomBytes(size);
+        } catch (e) {
+          err = e;
+        }
+      }
+      throw err;
+    }
+    function generateRandomBytes(size, attempts, callback) {
+      crypto.randomBytes(size, function onRandomBytes(err, buf) {
+        if (!err) return callback(null, buf);
+        if (!--attempts) return callback(err);
+        setTimeout(generateRandomBytes.bind(null, size, attempts, callback), 10);
+      });
+    }
+  }
+});
+
+// node_modules/uid-safe/index.js
+var require_uid_safe = __commonJS({
+  "node_modules/uid-safe/index.js"(exports2, module2) {
+    "use strict";
+    var randomBytes = require_random_bytes();
+    var EQUAL_END_REGEXP = /=+$/;
+    var PLUS_GLOBAL_REGEXP = /\+/g;
+    var SLASH_GLOBAL_REGEXP = /\//g;
+    module2.exports = uid;
+    module2.exports.sync = uidSync;
+    function uid(length, callback) {
+      if (callback !== void 0 && typeof callback !== "function") {
+        throw new TypeError("argument callback must be a function");
+      }
+      if (!callback && !global.Promise) {
+        throw new TypeError("argument callback is required");
+      }
+      if (callback) {
+        return generateUid(length, callback);
+      }
+      return new Promise(function executor(resolve, reject) {
+        generateUid(length, function onUid(err, str) {
+          if (err) return reject(err);
+          resolve(str);
+        });
+      });
+    }
+    function uidSync(length) {
+      return toString(randomBytes.sync(length));
+    }
+    function generateUid(length, callback) {
+      randomBytes(length, function(err, buf) {
+        if (err) return callback(err);
+        callback(null, toString(buf));
+      });
+    }
+    function toString(buf) {
+      return buf.toString("base64").replace(EQUAL_END_REGEXP, "").replace(PLUS_GLOBAL_REGEXP, "-").replace(SLASH_GLOBAL_REGEXP, "_");
+    }
+  }
+});
+
+// node_modules/express-session/session/cookie.js
+var require_cookie2 = __commonJS({
+  "node_modules/express-session/session/cookie.js"(exports2, module2) {
+    "use strict";
+    var cookie = require_cookie();
+    var deprecate = require_depd()("express-session");
+    var Cookie = module2.exports = function Cookie2(options) {
+      this.path = "/";
+      this.maxAge = null;
+      this.httpOnly = true;
+      if (options) {
+        if (typeof options !== "object") {
+          throw new TypeError("argument options must be a object");
+        }
+        for (var key in options) {
+          if (key !== "data") {
+            this[key] = options[key];
+          }
+        }
+      }
+      if (this.originalMaxAge === void 0 || this.originalMaxAge === null) {
+        this.originalMaxAge = this.maxAge;
+      }
+    };
+    Cookie.prototype = {
+      /**
+       * Set expires `date`.
+       *
+       * @param {Date} date
+       * @api public
+       */
+      set expires(date) {
+        this._expires = date;
+        this.originalMaxAge = this.maxAge;
+      },
+      /**
+       * Get expires `date`.
+       *
+       * @return {Date}
+       * @api public
+       */
+      get expires() {
+        return this._expires;
+      },
+      /**
+       * Set expires via max-age in `ms`.
+       *
+       * @param {Number} ms
+       * @api public
+       */
+      set maxAge(ms) {
+        if (ms && typeof ms !== "number" && !(ms instanceof Date)) {
+          throw new TypeError("maxAge must be a number or Date");
+        }
+        if (ms instanceof Date) {
+          deprecate("maxAge as Date; pass number of milliseconds instead");
+        }
+        this.expires = typeof ms === "number" ? new Date(Date.now() + ms) : ms;
+      },
+      /**
+       * Get expires max-age in `ms`.
+       *
+       * @return {Number}
+       * @api public
+       */
+      get maxAge() {
+        return this.expires instanceof Date ? this.expires.valueOf() - Date.now() : this.expires;
+      },
+      /**
+       * Return cookie data object.
+       *
+       * @return {Object}
+       * @api private
+       */
+      get data() {
+        return {
+          originalMaxAge: this.originalMaxAge,
+          partitioned: this.partitioned,
+          priority: this.priority,
+          expires: this._expires,
+          secure: this.secure,
+          httpOnly: this.httpOnly,
+          domain: this.domain,
+          path: this.path,
+          sameSite: this.sameSite
+        };
+      },
+      /**
+       * Return a serialized cookie string.
+       *
+       * @return {String}
+       * @api public
+       */
+      serialize: function(name, val) {
+        return cookie.serialize(name, val, this.data);
+      },
+      /**
+       * Return JSON representation of this cookie.
+       *
+       * @return {Object}
+       * @api private
+       */
+      toJSON: function() {
+        return this.data;
+      }
+    };
+  }
+});
+
+// node_modules/express-session/session/session.js
+var require_session2 = __commonJS({
+  "node_modules/express-session/session/session.js"(exports2, module2) {
+    "use strict";
+    module2.exports = Session;
+    function Session(req, data) {
+      Object.defineProperty(this, "req", { value: req });
+      Object.defineProperty(this, "id", { value: req.sessionID });
+      if (typeof data === "object" && data !== null) {
+        for (var prop in data) {
+          if (!(prop in this)) {
+            this[prop] = data[prop];
+          }
+        }
+      }
+    }
+    defineMethod(Session.prototype, "touch", function touch() {
+      return this.resetMaxAge();
+    });
+    defineMethod(Session.prototype, "resetMaxAge", function resetMaxAge() {
+      this.cookie.maxAge = this.cookie.originalMaxAge;
+      return this;
+    });
+    defineMethod(Session.prototype, "save", function save(fn) {
+      this.req.sessionStore.set(this.id, this, fn || function() {
+      });
+      return this;
+    });
+    defineMethod(Session.prototype, "reload", function reload(fn) {
+      var req = this.req;
+      var store = this.req.sessionStore;
+      store.get(this.id, function(err, sess) {
+        if (err) return fn(err);
+        if (!sess) return fn(new Error("failed to load session"));
+        store.createSession(req, sess);
+        fn();
+      });
+      return this;
+    });
+    defineMethod(Session.prototype, "destroy", function destroy(fn) {
+      delete this.req.session;
+      this.req.sessionStore.destroy(this.id, fn);
+      return this;
+    });
+    defineMethod(Session.prototype, "regenerate", function regenerate(fn) {
+      this.req.sessionStore.regenerate(this.req, fn);
+      return this;
+    });
+    function defineMethod(obj, name, fn) {
+      Object.defineProperty(obj, name, {
+        configurable: true,
+        enumerable: false,
+        value: fn,
+        writable: true
+      });
+    }
+  }
+});
+
+// node_modules/express-session/session/store.js
+var require_store = __commonJS({
+  "node_modules/express-session/session/store.js"(exports2, module2) {
+    "use strict";
+    var Cookie = require_cookie2();
+    var EventEmitter = require("events").EventEmitter;
+    var Session = require_session2();
+    var util = require("util");
+    module2.exports = Store;
+    function Store() {
+      EventEmitter.call(this);
+    }
+    util.inherits(Store, EventEmitter);
+    Store.prototype.regenerate = function(req, fn) {
+      var self2 = this;
+      this.destroy(req.sessionID, function(err) {
+        self2.generate(req);
+        fn(err);
+      });
+    };
+    Store.prototype.load = function(sid, fn) {
+      var self2 = this;
+      this.get(sid, function(err, sess) {
+        if (err) return fn(err);
+        if (!sess) return fn();
+        var req = { sessionID: sid, sessionStore: self2 };
+        fn(null, self2.createSession(req, sess));
+      });
+    };
+    Store.prototype.createSession = function(req, sess) {
+      var expires = sess.cookie.expires;
+      var originalMaxAge = sess.cookie.originalMaxAge;
+      sess.cookie = new Cookie(sess.cookie);
+      if (typeof expires === "string") {
+        sess.cookie.expires = new Date(expires);
+      }
+      sess.cookie.originalMaxAge = originalMaxAge;
+      req.session = new Session(req, sess);
+      return req.session;
+    };
+  }
+});
+
+// node_modules/express-session/session/memory.js
+var require_memory = __commonJS({
+  "node_modules/express-session/session/memory.js"(exports2, module2) {
+    "use strict";
+    var Store = require_store();
+    var util = require("util");
+    var defer = typeof setImmediate === "function" ? setImmediate : function(fn) {
+      process.nextTick(fn.bind.apply(fn, arguments));
+    };
+    module2.exports = MemoryStore;
+    function MemoryStore() {
+      Store.call(this);
+      this.sessions = /* @__PURE__ */ Object.create(null);
+    }
+    util.inherits(MemoryStore, Store);
+    MemoryStore.prototype.all = function all(callback) {
+      var sessionIds = Object.keys(this.sessions);
+      var sessions = /* @__PURE__ */ Object.create(null);
+      for (var i = 0; i < sessionIds.length; i++) {
+        var sessionId = sessionIds[i];
+        var session2 = getSession.call(this, sessionId);
+        if (session2) {
+          sessions[sessionId] = session2;
+        }
+      }
+      callback && defer(callback, null, sessions);
+    };
+    MemoryStore.prototype.clear = function clear(callback) {
+      this.sessions = /* @__PURE__ */ Object.create(null);
+      callback && defer(callback);
+    };
+    MemoryStore.prototype.destroy = function destroy(sessionId, callback) {
+      delete this.sessions[sessionId];
+      callback && defer(callback);
+    };
+    MemoryStore.prototype.get = function get(sessionId, callback) {
+      defer(callback, null, getSession.call(this, sessionId));
+    };
+    MemoryStore.prototype.set = function set(sessionId, session2, callback) {
+      this.sessions[sessionId] = JSON.stringify(session2);
+      callback && defer(callback);
+    };
+    MemoryStore.prototype.length = function length(callback) {
+      this.all(function(err, sessions) {
+        if (err) return callback(err);
+        callback(null, Object.keys(sessions).length);
+      });
+    };
+    MemoryStore.prototype.touch = function touch(sessionId, session2, callback) {
+      var currentSession = getSession.call(this, sessionId);
+      if (currentSession) {
+        currentSession.cookie = session2.cookie;
+        this.sessions[sessionId] = JSON.stringify(currentSession);
+      }
+      callback && defer(callback);
+    };
+    function getSession(sessionId) {
+      var sess = this.sessions[sessionId];
+      if (!sess) {
+        return;
+      }
+      sess = JSON.parse(sess);
+      if (sess.cookie) {
+        var expires = typeof sess.cookie.expires === "string" ? new Date(sess.cookie.expires) : sess.cookie.expires;
+        if (expires && expires <= Date.now()) {
+          delete this.sessions[sessionId];
+          return;
+        }
+      }
+      return sess;
+    }
+  }
+});
+
+// node_modules/express-session/index.js
+var require_express_session = __commonJS({
+  "node_modules/express-session/index.js"(exports2, module2) {
+    "use strict";
+    var Buffer2 = require_safe_buffer().Buffer;
+    var cookie = require_cookie();
+    var crypto = require("crypto");
+    var debug = require_src2()("express-session");
+    var deprecate = require_depd()("express-session");
+    var onHeaders = require_on_headers();
+    var parseUrl = require_parseurl();
+    var signature = require_cookie_signature2();
+    var uid = require_uid_safe().sync;
+    var Cookie = require_cookie2();
+    var MemoryStore = require_memory();
+    var Session = require_session2();
+    var Store = require_store();
+    var env = process.env.NODE_ENV;
+    exports2 = module2.exports = session2;
+    exports2.Store = Store;
+    exports2.Cookie = Cookie;
+    exports2.Session = Session;
+    exports2.MemoryStore = MemoryStore;
+    var warning = "Warning: connect.session() MemoryStore is not\ndesigned for a production environment, as it will leak\nmemory, and will not scale past a single process.";
+    var defer = typeof setImmediate === "function" ? setImmediate : function(fn) {
+      process.nextTick(fn.bind.apply(fn, arguments));
+    };
+    function session2(options) {
+      var opts = options || {};
+      var cookieOptions = opts.cookie || {};
+      var generateId = opts.genid || generateSessionId;
+      var name = opts.name || opts.key || "connect.sid";
+      var store = opts.store || new MemoryStore();
+      var trustProxy = opts.proxy;
+      var resaveSession = opts.resave;
+      var rollingSessions = Boolean(opts.rolling);
+      var saveUninitializedSession = opts.saveUninitialized;
+      var secret = opts.secret;
+      if (typeof generateId !== "function") {
+        throw new TypeError("genid option must be a function");
+      }
+      if (resaveSession === void 0) {
+        deprecate("undefined resave option; provide resave option");
+        resaveSession = true;
+      }
+      if (saveUninitializedSession === void 0) {
+        deprecate("undefined saveUninitialized option; provide saveUninitialized option");
+        saveUninitializedSession = true;
+      }
+      if (opts.unset && opts.unset !== "destroy" && opts.unset !== "keep") {
+        throw new TypeError('unset option must be "destroy" or "keep"');
+      }
+      var unsetDestroy = opts.unset === "destroy";
+      if (Array.isArray(secret) && secret.length === 0) {
+        throw new TypeError("secret option array must contain one or more strings");
+      }
+      if (secret && !Array.isArray(secret)) {
+        secret = [secret];
+      }
+      if (!secret) {
+        deprecate("req.secret; provide secret option");
+      }
+      if (env === "production" && store instanceof MemoryStore) {
+        console.warn(warning);
+      }
+      store.generate = function(req) {
+        req.sessionID = generateId(req);
+        req.session = new Session(req);
+        req.session.cookie = new Cookie(cookieOptions);
+        if (cookieOptions.secure === "auto") {
+          req.session.cookie.secure = issecure(req, trustProxy);
+        }
+      };
+      var storeImplementsTouch = typeof store.touch === "function";
+      var storeReady = true;
+      store.on("disconnect", function ondisconnect() {
+        storeReady = false;
+      });
+      store.on("connect", function onconnect() {
+        storeReady = true;
+      });
+      return function session3(req, res, next) {
+        if (req.session) {
+          next();
+          return;
+        }
+        if (!storeReady) {
+          debug("store is disconnected");
+          next();
+          return;
+        }
+        var originalPath = parseUrl.original(req).pathname || "/";
+        if (originalPath.indexOf(cookieOptions.path || "/") !== 0) {
+          debug("pathname mismatch");
+          next();
+          return;
+        }
+        if (!secret && !req.secret) {
+          next(new Error("secret option required for sessions"));
+          return;
+        }
+        var secrets = secret || [req.secret];
+        var originalHash;
+        var originalId;
+        var savedHash;
+        var touched = false;
+        req.sessionStore = store;
+        var cookieId = req.sessionID = getcookie(req, name, secrets);
+        onHeaders(res, function() {
+          if (!req.session) {
+            debug("no session");
+            return;
+          }
+          if (!shouldSetCookie(req)) {
+            return;
+          }
+          if (req.session.cookie.secure && !issecure(req, trustProxy)) {
+            debug("not secured");
+            return;
+          }
+          if (!touched) {
+            req.session.touch();
+            touched = true;
+          }
+          try {
+            setcookie(res, name, req.sessionID, secrets[0], req.session.cookie.data);
+          } catch (err) {
+            defer(next, err);
+          }
+        });
+        var _end = res.end;
+        var _write = res.write;
+        var ended = false;
+        res.end = function end(chunk, encoding) {
+          if (ended) {
+            return false;
+          }
+          ended = true;
+          var ret;
+          var sync = true;
+          function writeend() {
+            if (sync) {
+              ret = _end.call(res, chunk, encoding);
+              sync = false;
+              return;
+            }
+            _end.call(res);
+          }
+          function writetop() {
+            if (!sync) {
+              return ret;
+            }
+            if (!res._header) {
+              res._implicitHeader();
+            }
+            if (chunk == null) {
+              ret = true;
+              return ret;
+            }
+            var contentLength = Number(res.getHeader("Content-Length"));
+            if (!isNaN(contentLength) && contentLength > 0) {
+              chunk = !Buffer2.isBuffer(chunk) ? Buffer2.from(chunk, encoding) : chunk;
+              encoding = void 0;
+              if (chunk.length !== 0) {
+                debug("split response");
+                ret = _write.call(res, chunk.slice(0, chunk.length - 1));
+                chunk = chunk.slice(chunk.length - 1, chunk.length);
+                return ret;
+              }
+            }
+            ret = _write.call(res, chunk, encoding);
+            sync = false;
+            return ret;
+          }
+          if (shouldDestroy(req)) {
+            debug("destroying");
+            store.destroy(req.sessionID, function ondestroy(err) {
+              if (err) {
+                defer(next, err);
+              }
+              debug("destroyed");
+              writeend();
+            });
+            return writetop();
+          }
+          if (!req.session) {
+            debug("no session");
+            return _end.call(res, chunk, encoding);
+          }
+          if (!touched) {
+            req.session.touch();
+            touched = true;
+          }
+          if (shouldSave(req)) {
+            req.session.save(function onsave(err) {
+              if (err) {
+                defer(next, err);
+              }
+              writeend();
+            });
+            return writetop();
+          } else if (storeImplementsTouch && shouldTouch(req)) {
+            debug("touching");
+            store.touch(req.sessionID, req.session, function ontouch(err) {
+              if (err) {
+                defer(next, err);
+              }
+              debug("touched");
+              writeend();
+            });
+            return writetop();
+          }
+          return _end.call(res, chunk, encoding);
+        };
+        function generate() {
+          store.generate(req);
+          originalId = req.sessionID;
+          originalHash = hash(req.session);
+          wrapmethods(req.session);
+        }
+        function inflate(req2, sess) {
+          store.createSession(req2, sess);
+          originalId = req2.sessionID;
+          originalHash = hash(sess);
+          if (!resaveSession) {
+            savedHash = originalHash;
+          }
+          wrapmethods(req2.session);
+        }
+        function rewrapmethods(sess, callback) {
+          return function() {
+            if (req.session !== sess) {
+              wrapmethods(req.session);
+            }
+            callback.apply(this, arguments);
+          };
+        }
+        function wrapmethods(sess) {
+          var _reload = sess.reload;
+          var _save = sess.save;
+          function reload(callback) {
+            debug("reloading %s", this.id);
+            _reload.call(this, rewrapmethods(this, callback));
+          }
+          function save() {
+            debug("saving %s", this.id);
+            savedHash = hash(this);
+            _save.apply(this, arguments);
+          }
+          Object.defineProperty(sess, "reload", {
+            configurable: true,
+            enumerable: false,
+            value: reload,
+            writable: true
+          });
+          Object.defineProperty(sess, "save", {
+            configurable: true,
+            enumerable: false,
+            value: save,
+            writable: true
+          });
+        }
+        function isModified(sess) {
+          return originalId !== sess.id || originalHash !== hash(sess);
+        }
+        function isSaved(sess) {
+          return originalId === sess.id && savedHash === hash(sess);
+        }
+        function shouldDestroy(req2) {
+          return req2.sessionID && unsetDestroy && req2.session == null;
+        }
+        function shouldSave(req2) {
+          if (typeof req2.sessionID !== "string") {
+            debug("session ignored because of bogus req.sessionID %o", req2.sessionID);
+            return false;
+          }
+          return !saveUninitializedSession && !savedHash && cookieId !== req2.sessionID ? isModified(req2.session) : !isSaved(req2.session);
+        }
+        function shouldTouch(req2) {
+          if (typeof req2.sessionID !== "string") {
+            debug("session ignored because of bogus req.sessionID %o", req2.sessionID);
+            return false;
+          }
+          return cookieId === req2.sessionID && !shouldSave(req2);
+        }
+        function shouldSetCookie(req2) {
+          if (typeof req2.sessionID !== "string") {
+            return false;
+          }
+          return cookieId !== req2.sessionID ? saveUninitializedSession || isModified(req2.session) : rollingSessions || req2.session.cookie.expires != null && isModified(req2.session);
+        }
+        if (!req.sessionID) {
+          debug("no SID sent, generating session");
+          generate();
+          next();
+          return;
+        }
+        debug("fetching %s", req.sessionID);
+        store.get(req.sessionID, function(err, sess) {
+          if (err && err.code !== "ENOENT") {
+            debug("error %j", err);
+            next(err);
+            return;
+          }
+          try {
+            if (err || !sess) {
+              debug("no session found");
+              generate();
+            } else {
+              debug("session found");
+              inflate(req, sess);
+            }
+          } catch (e) {
+            next(e);
+            return;
+          }
+          next();
+        });
+      };
+    }
+    function generateSessionId(sess) {
+      return uid(24);
+    }
+    function getcookie(req, name, secrets) {
+      var header = req.headers.cookie;
+      var raw;
+      var val;
+      if (header) {
+        var cookies = cookie.parse(header);
+        raw = cookies[name];
+        if (raw) {
+          if (raw.substr(0, 2) === "s:") {
+            val = unsigncookie(raw.slice(2), secrets);
+            if (val === false) {
+              debug("cookie signature invalid");
+              val = void 0;
+            }
+          } else {
+            debug("cookie unsigned");
+          }
+        }
+      }
+      if (!val && req.signedCookies) {
+        val = req.signedCookies[name];
+        if (val) {
+          deprecate("cookie should be available in req.headers.cookie");
+        }
+      }
+      if (!val && req.cookies) {
+        raw = req.cookies[name];
+        if (raw) {
+          if (raw.substr(0, 2) === "s:") {
+            val = unsigncookie(raw.slice(2), secrets);
+            if (val) {
+              deprecate("cookie should be available in req.headers.cookie");
+            }
+            if (val === false) {
+              debug("cookie signature invalid");
+              val = void 0;
+            }
+          } else {
+            debug("cookie unsigned");
+          }
+        }
+      }
+      return val;
+    }
+    function hash(sess) {
+      var str = JSON.stringify(sess, function(key, val) {
+        if (this === sess && key === "cookie") {
+          return;
+        }
+        return val;
+      });
+      return crypto.createHash("sha1").update(str, "utf8").digest("hex");
+    }
+    function issecure(req, trustProxy) {
+      if (req.connection && req.connection.encrypted) {
+        return true;
+      }
+      if (trustProxy === false) {
+        return false;
+      }
+      if (trustProxy !== true) {
+        return req.secure === true;
+      }
+      var header = req.headers["x-forwarded-proto"] || "";
+      var index = header.indexOf(",");
+      var proto = index !== -1 ? header.substr(0, index).toLowerCase().trim() : header.toLowerCase().trim();
+      return proto === "https";
+    }
+    function setcookie(res, name, val, secret, options) {
+      var signed = "s:" + signature.sign(val, secret);
+      var data = cookie.serialize(name, signed, options);
+      debug("set-cookie %s", data);
+      var prev = res.getHeader("Set-Cookie") || [];
+      var header = Array.isArray(prev) ? prev.concat(data) : [prev, data];
+      res.setHeader("Set-Cookie", header);
+    }
+    function unsigncookie(val, secrets) {
+      for (var i = 0; i < secrets.length; i++) {
+        var result = signature.unsign(val, secrets[i]);
+        if (result !== false) {
+          return result;
+        }
+      }
+      return false;
+    }
+  }
+});
+
+// node_modules/passport-local/lib/utils.js
+var require_utils8 = __commonJS({
+  "node_modules/passport-local/lib/utils.js"(exports2) {
+    exports2.lookup = function(obj, field) {
+      if (!obj) {
+        return null;
+      }
+      var chain = field.split("]").join("").split("[");
+      for (var i = 0, len = chain.length; i < len; i++) {
+        var prop = obj[chain[i]];
+        if (typeof prop === "undefined") {
+          return null;
+        }
+        if (typeof prop !== "object") {
+          return prop;
+        }
+        obj = prop;
+      }
+      return null;
+    };
+  }
+});
+
+// node_modules/passport-local/lib/strategy.js
+var require_strategy2 = __commonJS({
+  "node_modules/passport-local/lib/strategy.js"(exports2, module2) {
+    var passport2 = require_lib9();
+    var util = require("util");
+    var lookup = require_utils8().lookup;
+    function Strategy(options, verify) {
+      if (typeof options == "function") {
+        verify = options;
+        options = {};
+      }
+      if (!verify) {
+        throw new TypeError("LocalStrategy requires a verify callback");
+      }
+      this._usernameField = options.usernameField || "username";
+      this._passwordField = options.passwordField || "password";
+      passport2.Strategy.call(this);
+      this.name = "local";
+      this._verify = verify;
+      this._passReqToCallback = options.passReqToCallback;
+    }
+    util.inherits(Strategy, passport2.Strategy);
+    Strategy.prototype.authenticate = function(req, options) {
+      options = options || {};
+      var username = lookup(req.body, this._usernameField) || lookup(req.query, this._usernameField);
+      var password = lookup(req.body, this._passwordField) || lookup(req.query, this._passwordField);
+      if (!username || !password) {
+        return this.fail({ message: options.badRequestMessage || "Missing credentials" }, 400);
+      }
+      var self2 = this;
+      function verified(err, user, info) {
+        if (err) {
+          return self2.error(err);
+        }
+        if (!user) {
+          return self2.fail(info);
+        }
+        self2.success(user, info);
+      }
+      try {
+        if (self2._passReqToCallback) {
+          this._verify(req, username, password, verified);
+        } else {
+          this._verify(username, password, verified);
+        }
+      } catch (ex) {
+        return self2.error(ex);
+      }
+    };
+    module2.exports = Strategy;
+  }
+});
+
+// node_modules/passport-local/lib/index.js
+var require_lib11 = __commonJS({
+  "node_modules/passport-local/lib/index.js"(exports2, module2) {
+    var Strategy = require_strategy2();
+    exports2 = module2.exports = Strategy;
+    exports2.Strategy = Strategy;
+  }
+});
+
 // netlify/functions/api.js
 var api_exports = {};
 __export(api_exports, {
@@ -93293,12 +95364,37 @@ var ConnectDB = async () => {
 };
 
 // app.js
+var import_passport = __toESM(require_lib10(), 1);
+var import_express_session = __toESM(require_express_session(), 1);
+var import_passport_local = __toESM(require_lib11(), 1);
 import_dotenv.default.config();
 var app = (0, import_express3.default)();
 var router3 = import_express3.default.Router();
 app.use(import_express3.default.json());
 app.use(import_express3.default.urlencoded({ extended: true }));
-router3.get("/", (req, res) => {
+import_passport.default.use(
+  new import_passport_local.Strategy(async (userName, password, done) => {
+    try {
+      console.log("recived user crenditial", userName, password);
+      const user = await user_default.findOne({ name: userName });
+      if (!user) {
+        return done(null, false, { message: "incorrect userName" });
+      }
+      const isPasswordMatch = user.password === password ? true : false;
+      if (isPasswordMatch) {
+        return done(null, user);
+      } else {
+        return done(null, false, { message: "incorrect user password" });
+      }
+    } catch (error) {
+      console.log("\u{1F680} ~ app.use ~ error:", error);
+      return done(error);
+    }
+  })
+);
+app.use(import_passport.default.initialize());
+var authVerification = import_passport.default.authenticate("local", { session: false });
+router3.get("/", authVerification, (req, res) => {
   res.status(200).json({
     message: "Welcome to the Job Portal API",
     status: "success"
@@ -94262,6 +96358,73 @@ mongoose/lib/mongoose.js:
   (*!
    * Create a new default connection (`mongoose.connection`) for a Mongoose instance.
    * No-op if there is already a default connection.
+   *)
+
+on-headers/index.js:
+  (*!
+   * on-headers
+   * Copyright(c) 2014 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+random-bytes/index.js:
+  (*!
+   * random-bytes
+   * Copyright(c) 2016 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+uid-safe/index.js:
+  (*!
+   * uid-safe
+   * Copyright(c) 2014 Jonathan Ong
+   * Copyright(c) 2015-2017 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+express-session/session/cookie.js:
+  (*!
+   * Connect - session - Cookie
+   * Copyright(c) 2010 Sencha Inc.
+   * Copyright(c) 2011 TJ Holowaychuk
+   * MIT Licensed
+   *)
+  (*!
+   * Prototype.
+   *)
+
+express-session/session/session.js:
+  (*!
+   * Connect - session - Session
+   * Copyright(c) 2010 Sencha Inc.
+   * Copyright(c) 2011 TJ Holowaychuk
+   * MIT Licensed
+   *)
+
+express-session/session/store.js:
+  (*!
+   * Connect - session - Store
+   * Copyright(c) 2010 Sencha Inc.
+   * Copyright(c) 2011 TJ Holowaychuk
+   * MIT Licensed
+   *)
+
+express-session/session/memory.js:
+  (*!
+   * express-session
+   * Copyright(c) 2010 Sencha Inc.
+   * Copyright(c) 2011 TJ Holowaychuk
+   * Copyright(c) 2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+express-session/index.js:
+  (*!
+   * express-session
+   * Copyright(c) 2010 Sencha Inc.
+   * Copyright(c) 2011 TJ Holowaychuk
+   * Copyright(c) 2014-2015 Douglas Christopher Wilson
+   * MIT Licensed
    *)
 */
 //# sourceMappingURL=api.js.map
