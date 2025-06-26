@@ -1,7 +1,13 @@
 import express from "express";
 // import user from "../models/User.js";
-import { generateToken, jwtAuthMiddleware } from "../utils/jwt.js";
+import {
+  ensureAuthenticated,
+  generateToken,
+  jwtAuthMiddleware,
+} from "../utils/jwt.js";
 import User from "../models/user.js";
+import bcrypt from "bcryptjs";
+import passport from "passport";
 // -----------------------------------------------
 
 const router = express.Router();
@@ -9,14 +15,8 @@ const router = express.Router();
 // User registration route
 router.post("/signUp", async (req, res) => {
   try {
-    // const { name, age, email, mobile, address, cnic, password } = req.body;
-    // const rawData = req.body;
     const data = JSON.parse(req.body);
-    const { email } = data;
-    console.log("Received data for user registration:", data);
-
-    // create a new user
-    const newUser = new User(data);
+    const { name, age, email, mobile, address, cnic, password } = data;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -24,19 +24,39 @@ router.post("/signUp", async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
+    // Hash password
+    const hash = await bcrypt.hash(password, 10);
+
+    // Create new user instance
+    const newUser = new User({
+      name,
+      age,
+      email,
+      mobile,
+      address,
+      cnic,
+      password: hash,
+    });
+
+    // Save to DB
     const response = await newUser.save();
-    console.log("User registered successfully:", response);
-    // Save the user to the database
 
-    const payload = {
-      id: response._id,
-    };
-    console.log(JSON.stringify(payload));
-    // generate a JWT token
-    const token = generateToken(payload);
-    console.log("Generated JWT token:", token);
+    // Create JWT payload
+    const payload = { id: response._id };
 
-    res.status(200).json({ response: response, token: token });
+    // Generate token
+    const token = generateToken(payload); // ⬅️ This function should be defined in utils
+
+    // Respond with user and token
+    res.status(200).json({
+      message: "User registered successfully",
+      user: {
+        id: response._id,
+        email: response.email,
+        name: response.name,
+      },
+      token,
+    });
   } catch (error) {
     console.error("Error registering user:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -51,10 +71,16 @@ router.post("/login", async (req, res) => {
     const { password, cnic } = data;
 
     // find user by cnic
-    const user = await User.findOne({ cnic: cnic, password: password });
-    console.log(`User login attempt with CNIC:${cnic} & password:${password} `);
+    const user = await User.findOne({ cnic });
+    console.log(`User login attempt with CNIC:${cnic} `);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
+    }
+
+    // Compare hashed password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
     // generate a JWT token
@@ -64,7 +90,16 @@ router.post("/login", async (req, res) => {
     const token = generateToken(payload);
     console.log("Generated JWT token:", token);
 
-    res.json({ token });
+    res.status(200).json({
+      message: "Login successful",
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        cnic: user.cnic,
+      },
+    });
   } catch (error) {
     console.error("Error logging in user:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -130,6 +165,13 @@ router.put("/profile/password", jwtAuthMiddleware, async (req, res) => {
     console.error("Error changing password:", error);
     res.status(500).json({ message: "Internal server error" });
   }
+});
+
+// logged out route
+router.get("/logout", (req, res) => {
+  req.logOut(() => {
+    res.json({ message: "Logged out" });
+  });
 });
 
 export default router;

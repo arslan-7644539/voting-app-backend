@@ -1,8 +1,13 @@
+import cors from "cors";
 import express from "express";
 import dotenv from "dotenv";
 import userRoutes from "./src/routes/userRoutes.js";
 import candidateRoutes from "./src/routes/candidateRoutes.js";
 import { ConnectDB } from "./src/utils/db.js";
+import session from "express-session";
+import passport from "passport";
+import flash from "connect-flash/lib/flash.js";
+import { ensureAuthenticated } from "./src/utils/jwt.js";
 
 // Configure environment variables
 dotenv.config();
@@ -11,9 +16,25 @@ dotenv.config();
 const app = express();
 const router = express.Router();
 
-// Middleware
+// express jason Middleware
 app.use(express.json()); // Parse incoming JSON requests
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded data
+app.use(cors());
+
+// Session
+app.use(
+  session({
+    secret: "mysecret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false }, // true if using https
+  })
+);
+
+// Passport middleware
+app.use(passport.initialize());
+app.use(passport.session());
+app.use(flash());
 
 // Root Route
 router.get("/", (req, res) => {

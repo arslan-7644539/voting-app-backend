@@ -1,52 +1,58 @@
 import serverless from "serverless-http";
+import chalk from "chalk";
 import { app, ConnectDB } from "../../app.js";
 
 let isDbConnected = false;
 let dbConnectionPromise = null;
 
-// Ensure MongoDB connection (with promise caching)
+// ----------------------
+// ✅ DB Connection Helper
+// ----------------------
 const ensureDbConnection = async () => {
   if (!isDbConnected && !dbConnectionPromise) {
     dbConnectionPromise = ConnectDB()
       .then(() => {
         isDbConnected = true;
-        console.log("✅ Database connected in Lambda.");
+        console.log(chalk.greenBright("✅ MongoDB Connected (Lambda)"));
       })
       .catch((error) => {
-        console.error("❌ Database connection error:", error);
+        console.error(
+          chalk.red("❌ MongoDB Connection Failed:"),
+          error.message
+        );
         throw error;
       })
       .finally(() => {
-        dbConnectionPromise = null; // Clear for next retry if needed
+        dbConnectionPromise = null;
       });
   }
 
   if (dbConnectionPromise) await dbConnectionPromise;
-
-  if (!isDbConnected) throw new Error("Database connection failed.");
+  if (!isDbConnected) throw new Error("Database connection failed");
 };
 
-// Create serverless Express handler
+// ----------------------
+// ✅ Serverless Wrapper
+// ----------------------
 const serverlessHandler = serverless(app, {
   binary: ["image/*", "application/pdf", "application/octet-stream"],
   request: (req, event) => {
-    console.log("🔍 Incoming Event Details:");
-    console.log("Body Type:", typeof event.body);
-    console.log("isBase64Encoded:", event.isBase64Encoded);
-    console.log(
-      "Content-Type:",
-      event.headers["content-type"] || event.headers["Content-Type"]
-    );
+    const contentType =
+      event.headers["content-type"] || event.headers["Content-Type"];
 
-    // Decode base64 bodies if necessary
+    console.log(chalk.cyan("\n🔍 Incoming Request:"));
+    console.log("→ Method:", chalk.yellow(event.httpMethod));
+    console.log("→ Path:", chalk.yellow(event.path));
+    console.log("→ Content-Type:", chalk.gray(contentType));
+    console.log("→ isBase64Encoded:", event.isBase64Encoded);
+
     if (event.isBase64Encoded && event.body) {
       try {
-        const decoded = Buffer.from(event.body, "base64").toString("utf-8");
-        event.body = decoded;
+        event.body = Buffer.from(event.body, "base64").toString("utf-8");
         event.isBase64Encoded = false;
-        console.log("✅ Body successfully decoded.");
+        console.log(chalk.green("✅ Body decoded successfully."));
       } catch (err) {
-        console.error("❌ Base64 Decode Error:", err);
+        console.error(chalk.red("❌ Base64 Decoding Error:"), err.message);
       }
     }
 
@@ -54,22 +60,32 @@ const serverlessHandler = serverless(app, {
   },
 });
 
-// Lambda Handler
+// ----------------------
+// ✅ Lambda Handler
+// ----------------------
 export const handler = async (event, context) => {
-  context.callbackWaitsForEmptyEventLoop = false; // Don't wait for Node event loop
+  context.callbackWaitsForEmptyEventLoop = false;
 
   try {
-    console.log("📥 Event:", JSON.stringify(event, null, 2));
-    console.log("Method:", event.httpMethod, "Path:", event.path);
+    console.log(chalk.magentaBright("\n📥 [Event Received]"));
+    console.log("→ Method:", chalk.yellow(event.httpMethod));
+    console.log("→ Path:", chalk.yellow(event.path));
+    console.log("→ Time:", chalk.gray(new Date().toISOString()));
 
-    await ensureDbConnection(); // Connect to DB before handling
+    await ensureDbConnection();
 
-    const result = await serverlessHandler(event, context);
+    const response = await serverlessHandler(event, context);
 
-    console.log("📤 Response Status:", result.statusCode);
-    return result;
+    console.log(chalk.greenBright("\n📤 [Response Sent]"));
+    console.log("→ Status Code:", chalk.bold(response.statusCode));
+    console.log("→ Time:", chalk.gray(new Date().toISOString()));
+
+    return response;
   } catch (error) {
-    console.error("❌ Lambda Error:", error);
+    console.error(chalk.bgRed.white.bold("\n🔥 [UNHANDLED ERROR]"));
+    console.error(chalk.red("→ Message:"), error.message);
+    console.error(chalk.gray("→ Stack:\n") + error.stack);
+    console.error(chalk.gray("→ Time:"), new Date().toISOString());
 
     return {
       statusCode: 500,
