@@ -3,15 +3,20 @@ import express from "express";
 import { generateToken, jwtAuthMiddleware } from "../utils/jwt.js";
 import User from "../models/user.js";
 import bcrypt from "bcryptjs";
+import { fileUpload } from "../utils/multerConfige.js";
+import cloudinary from "../utils/cloudinary.js";
+import fs from "fs";
+
 // -----------------------------------------------
 
 const router = express.Router();
 
 // User registration route
-router.post("/signUp", async (req, res) => {
+router.post("/signUp", fileUpload.single("photo"), async (req, res) => {
   try {
-    const data = JSON.parse(req.body);
-    const { name, age, email, mobile, address, cnic, password } = data;
+    // const data = JSON.parse(req.body);
+    const { name, age, email, mobile, address, cnic, password, photo } =
+      req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -21,6 +26,17 @@ router.post("/signUp", async (req, res) => {
 
     // Hash password
     const hash = await bcrypt.hash(password, 10);
+    // file path
+    // const photoPath = req.file ? req.file.buffer.toString('base64') : null;
+    const photoPath = req.file ? req.file.path : null;
+
+    // Upload to Cloudinary
+    const result = await cloudinary.uploader.upload(photoPath, {
+      folder: "profile-photos",
+    });
+
+    // Delete temp file from uploads folder 
+    fs.unlinkSync(req.file.path);
 
     // Create new user instance
     const newUser = new User({
@@ -31,6 +47,7 @@ router.post("/signUp", async (req, res) => {
       address,
       cnic,
       password: hash,
+      photo: result.secure_url,
     });
 
     // Save to DB
@@ -141,10 +158,6 @@ router.put("/profile/password", jwtAuthMiddleware, async (req, res) => {
     if (userProfile.password !== oldPassword) {
       return res.status(400).json({ message: "Old password is incorrect" });
     }
-
-    // if (!(await userProfile.comparePassword(oldPassword))) {
-    //   return res.status(400).json({ message: "Old password is incorrect" });
-    // }
 
     // Update password
     userProfile.password = newPassword;

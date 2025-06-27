@@ -46,6 +46,9 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    photo: {
+      type: String, //store base64 encoded
+    },
   },
   {
     timestamps: true,
