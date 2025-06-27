@@ -1,13 +1,8 @@
 import express from "express";
 // import user from "../models/User.js";
-import {
-  ensureAuthenticated,
-  generateToken,
-  jwtAuthMiddleware,
-} from "../utils/jwt.js";
+import { generateToken, jwtAuthMiddleware } from "../utils/jwt.js";
 import User from "../models/user.js";
 import bcrypt from "bcryptjs";
-import passport from "passport";
 // -----------------------------------------------
 
 const router = express.Router();
@@ -73,13 +68,11 @@ router.post("/login", async (req, res) => {
     // find user by cnic
     const user = await User.findOne({ cnic });
     console.log(`User login attempt with CNIC:${cnic} `);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
 
     // Compare hashed password
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
+
+    if (!user || !isMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 

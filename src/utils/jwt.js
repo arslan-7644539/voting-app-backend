@@ -16,17 +16,16 @@ export function jwtAuthMiddleware(req, res, next) {
     return res.status(401).json({ message: "Token missing" });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(403).json({ message: "Invalid or expired token" });
-    }
-    req.user = decoded;
-    next();
-  });
+  try {
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+      if (err) {
+        return res.status(403).json({ message: "Invalid or expired token" });
+      }
+      req.user = decoded;
+      next();
+    });
+  } catch (error) {
+    console.error("🚀 ~ jwtAuthMiddleware ~ error:", error);
+    res.status(401).json({ error: "Invalid Tokken" });
+  }
 }
-
-// authMiddleware
-export const ensureAuthenticated = (req, res, next) => {
-  if (req.isAuthenticated()) return next();
-  res.status(401).json({ msg: "Unauthorized" });
-};
