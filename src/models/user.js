@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 const { Schema, model } = mongoose;
+import bcryptjs from "bcryptjs";
 
 const userSchema = new Schema(
   {
@@ -7,10 +8,6 @@ const userSchema = new Schema(
       type: String,
       required: true,
       trim: true,
-    },
-    age: {
-      type: Number,
-      required: true,
     },
     email: {
       type: String,
@@ -22,37 +19,44 @@ const userSchema = new Schema(
       required: true,
       unique: true,
     },
-    address: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    cnic: {
-      type: Number,
-      required: true,
-      unique: true,
-    },
     password: {
       type: String,
       required: true,
       minlength: 6,
     },
-    role: {
+    photo: {
       type: String,
-      enum: ["admin", "voter"],
-      default: "voter",
+      default: "👤",
+      //store base64 encoded
     },
-    isVoted: {
+    isOnline: {
       type: Boolean,
       default: false,
     },
-    photo: {
-      type: String, //store base64 encoded
+    lastSeen: {
+      type: Date,
+      default: Date.now,
     },
   },
   {
     timestamps: true,
   }
 );
+
+// userSchema.pre("save", async function (next) {
+//   if (!this.isModified("password")) return next();
+
+//   try {
+//     const salt = await bcryptjs.genSalt(12);
+//     this.password = await bcryptjs.hash(this.password, salt);
+//     next();
+//   } catch (error) {
+//     next(error);
+//   }
+// });
+
+// userSchema.methods.comparePassword = async function (userPassword) {
+//   return await bcryptjs.compare(userPassword, this.password);
+// };
 
 export default model("User", userSchema);

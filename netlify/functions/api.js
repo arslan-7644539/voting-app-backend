@@ -1,6 +1,6 @@
 import serverless from "serverless-http";
 import chalk from "chalk";
-import { app, ConnectDB } from "../../app.js";
+import { server, ConnectDB } from "../../app.js";
 
 let isDbConnected = false;
 let dbConnectionPromise = null;
@@ -34,7 +34,7 @@ const ensureDbConnection = async () => {
 // ----------------------
 // ✅ Serverless Wrapper
 // ----------------------
-const serverlessHandler = serverless(app, {
+const serverlessHandler = serverless(server, {
   binary: ["image/*", "application/pdf", "application/octet-stream"],
   request: (req, event) => {
     const contentType =

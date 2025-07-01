@@ -6,6 +6,14 @@ export function generateToken(payload) {
     expiresIn: "1h", // e.g., 1 hour
   });
 }
+// verifyTokken
+export const verifyToken = (token) => {
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET);
+  } catch (error) {
+    return null;
+  }
+};
 
 // jwtAuthMiddleware
 export function jwtAuthMiddleware(req, res, next) {

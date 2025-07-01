@@ -15,8 +15,7 @@ const router = express.Router();
 router.post("/signUp", fileUpload.single("photo"), async (req, res) => {
   try {
     // const data = JSON.parse(req.body);
-    const { name, age, email, mobile, address, cnic, password, photo } =
-      req.body;
+    const { name, email, password, mobile, photo } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -35,17 +34,14 @@ router.post("/signUp", fileUpload.single("photo"), async (req, res) => {
       folder: "profile-photos",
     });
 
-    // Delete temp file from uploads folder 
+    // Delete temp file from uploads folder
     fs.unlinkSync(req.file.path);
 
     // Create new user instance
     const newUser = new User({
       name,
-      age,
       email,
       mobile,
-      address,
-      cnic,
       password: hash,
       photo: result.secure_url,
     });
@@ -80,11 +76,11 @@ router.post("/login", async (req, res) => {
   try {
     // extract email and password from request body
     const data = JSON.parse(req.body);
-    const { password, cnic } = data;
+    const { password, email } = data;
 
-    // find user by cnic
-    const user = await User.findOne({ cnic });
-    console.log(`User login attempt with CNIC:${cnic} `);
+    // find user by email
+    const user = await User.findOne({ email });
+    console.log(`User login attempt with email:${email} `);
 
     // Compare hashed password
     const isMatch = await bcrypt.compare(password, user.password);
@@ -92,6 +88,10 @@ router.post("/login", async (req, res) => {
     if (!user || !isMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
+
+    user.isOnline = true;
+    user.lastSeen = new Date();
+    await user.save();
 
     // generate a JWT token
     const payload = {
@@ -174,10 +174,25 @@ router.put("/profile/password", jwtAuthMiddleware, async (req, res) => {
 });
 
 // logged out route
-router.get("/logout", (req, res) => {
-  req.logOut(() => {
-    res.json({ message: "Logged out" });
-  });
+router.get("/logout", jwtAuthMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Find and update user's online status
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.isOnline = false;
+    user.lastSeen = new Date();
+    await user.save();
+
+    res.status(200).json({ message: "Logged out successfully" });
+  } catch (error) {
+    console.error("Error during logout:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
 });
 
 export default router;
